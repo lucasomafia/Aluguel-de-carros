@@ -33,18 +33,13 @@ small { display: block; margin-top: 5px; color: #b8b7ba; font-size: 12px; }
 .linha-vinculo { display: grid; grid-template-columns: 1fr 160px auto; gap: 12px; align-items: end; }
 .remover { margin-bottom: 0; }
 .acoes { justify-content: flex-start; margin-top: 24px; }
-.secao-automoveis { margin-top: 30px; }
 .formulario-automovel { padding: 20px 0 8px; }
 .formulario-automovel h3 { margin-top: 0; }
-.lista-automoveis { display: grid; gap: 10px; margin-top: 18px; }
-.item-automovel { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px; border: 1px solid #4e4e50; background: #1f1f22; }
-.item-automovel p { margin: 5px 0 0; color: #b8b7ba; font-size: 13px; }
-.item-automovel .acoes { margin: 0; flex-shrink: 0; }
 @media (max-width: 620px) { .pagina { margin-top: 28px; } .cartao { padding: 20px; } .grade-campos, .linha-vinculo { grid-template-columns: 1fr; } .remover { justify-self: start; } }
 
 .pagina-acesso {
   width: 100%;
-  min-height: 100vh;
+  min-height: calc(100vh - 76px);
   margin: 0;
   display: grid;
   grid-template-columns: minmax(380px, 1fr) minmax(380px, 1fr);
@@ -86,8 +81,6 @@ small { display: block; margin-top: 5px; color: #b8b7ba; font-size: 12px; }
   .pagina-acesso .conteudo-pagina { width: min(100%, 480px); padding: 36px 24px; }
 }
 
-@media (max-width: 620px) { .item-automovel { align-items: flex-start; flex-direction: column; } }
-
 @media (max-width: 760px) {
   .pagina-acesso { display: flex; flex-direction: column; }
   .pagina-acesso .conteudo-pagina { flex: 1; margin: 0 auto; }
@@ -96,10 +89,11 @@ small { display: block; margin-top: 5px; color: #b8b7ba; font-size: 12px; }
 }
 
 .pagina-inicial { min-height: 100vh; background: #1a1a1d; }
-.cabecalho-inicial { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 76px; padding: 14px max(24px, calc((100vw - 1160px) / 2)); border-bottom: 1px solid #3b3b3f; }
+.cabecalho-inicial { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 76px; padding: 14px max(24px, calc((100vw - 1160px) / 2)); border-bottom: 1px solid #3b3b3f; background: #1a1a1d; }
 .marca-inicial { padding: 0; border: 0; background: transparent; color: #fff; font-size: 21px; font-weight: 700; text-align: left; }
 .marca-inicial:hover:not(:disabled) { border: 0; background: transparent; color: #fff; }
 .cabecalho-inicial nav button { min-width: 100px; }
+.navegacao-inicial { display: flex; gap: 8px; }
 .destaque-inicial { display: grid; grid-template-columns: minmax(320px, 42%) 1fr; min-height: 420px; background: #242428; }
 .texto-destaque { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; max-width: 510px; padding: 50px 32px 50px max(24px, calc((100vw - 1160px) / 2)); }
 .texto-destaque h1 { font-size: clamp(34px, 4vw, 52px); line-height: 1.12; letter-spacing: -.035em; }
@@ -113,10 +107,12 @@ small { display: block; margin-top: 5px; color: #b8b7ba; font-size: 12px; }
 .cartao-automovel { padding: 24px; border: 1px solid #4e4e50; background: #252529; }
 .cartao-automovel h3 { margin: 20px 0 12px; font-size: 21px; }
 .cartao-automovel p { margin: 6px 0; color: #b8b7ba; font-size: 14px; }
+.cartao-automovel .acoes-automovel { margin-top: 18px; }
+.formulario-automovel-home { margin-bottom: 32px; padding: 24px; border: 1px solid #4e4e50; background: #252529; scroll-margin-top: 100px; }
+.formulario-automovel-home h2 { margin-bottom: 4px; }
 .selo-ano { display: inline-block; padding: 4px 10px; background: #6f2232; color: #fff; font-size: 13px; }
 .estado-lista { padding: 24px; border: 1px solid #4e4e50; color: #b8b7ba; }
-.voltar-inicio { display: block; margin: 0 0 22px; padding: 0; border: 0; background: transparent; color: #b8b7ba; }
-.voltar-inicio:hover:not(:disabled) { border: 0; background: transparent; color: #fff; }
+#titulo-catalogo { scroll-margin-top: 100px; }
 @media (max-width: 760px) {
   .destaque-inicial { grid-template-columns: 1fr; }
   .texto-destaque { padding: 44px 24px; }
@@ -136,4 +132,11 @@ small { display: block; margin-top: 5px; color: #b8b7ba; font-size: 12px; }
 @media (max-width: 760px) {
   .barra-filtros { grid-template-columns: 1fr; margin-top: 0; }
   .barra-filtros > button { min-height: 46px; }
+}
+
+@media (max-width: 620px) {
+  .cabecalho-inicial { gap: 10px; padding: 12px 16px; }
+  .marca-inicial { font-size: 16px; }
+  .navegacao-inicial { gap: 6px; }
+  .cabecalho-inicial nav button { min-width: 0; padding: 8px 10px; }
 }

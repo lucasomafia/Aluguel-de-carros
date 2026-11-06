@@ -128,10 +128,10 @@ function App() {
         const dadosUsuario = await chamarApi('auth/login', 'POST', credencial)
         autorizacao.current = credencial
         definirUsuario(dadosUsuario)
-        definirTela('conta')
         definirSenha('')
         if (dadosUsuario.perfil === 'CLIENTE') await carregarCliente()
         await carregarAutomoveis()
+        definirTela('inicio')
       }
     } catch (erro) {
       mostrarMensagem(true, erro.message)
@@ -146,7 +146,6 @@ function App() {
     try {
       definirUsuario(await chamarApi('auth/me', 'GET', autorizacao.current))
       if (usuario.perfil === 'CLIENTE') await carregarCliente()
-      await carregarAutomoveis()
       mostrarMensagem(false, 'Dados atualizados com sucesso.')
     } catch (erro) {
       mostrarMensagem(true, erro.message)
@@ -222,6 +221,7 @@ function App() {
     definirFormularioAutomovel({ matricula: automovel.matricula, ano: String(automovel.ano),
       marca: automovel.marca, modelo: automovel.modelo, placa: automovel.placa })
     definirMensagem(null)
+    document.getElementById('cadastro-automovel')?.scrollIntoView({ behavior: 'smooth' })
   }
 
   async function excluirAutomovel(automovel) {
@@ -257,15 +257,23 @@ function App() {
     definirTela('inicio')
   }
 
+  const cabecalho = (
+    <header className="cabecalho-inicial">
+      <button type="button" className="marca-inicial" onClick={() => trocarTela('inicio')}>Aluguel de carros</button>
+      <nav aria-label="Acesso" className="navegacao-inicial">
+        <button type="button" onClick={() => trocarTela(usuario ? 'conta' : 'login')}>{usuario ? 'Minha conta' : 'Entrar'}</button>
+        {usuario && <button type="button" className="secundario" onClick={sair}>Sair</button>}
+      </nav>
+    </header>
+  )
+
   if (tela === 'inicio') {
     return (
+      <>
+      {cabecalho}
       <main className="pagina-inicial">
-        <header className="cabecalho-inicial">
-          <button type="button" className="marca-inicial" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Aluguel de carros</button>
-          <nav aria-label="Acesso"><button type="button" onClick={() => trocarTela(usuario ? 'conta' : 'login')}>{usuario ? 'Minha conta' : 'Entrar'}</button></nav>
-        </header>
         <section className="destaque-inicial">
-          <div className="texto-destaque"><h1>Seu próximo caminho começa aqui.</h1><p>Explore os automóveis cadastrados e encontre o que combina com você.</p><button type="button" onClick={() => trocarTela(usuario ? 'conta' : 'cadastro')}>{usuario ? 'Minha conta' : 'Criar conta'}</button></div>
+          <div className="texto-destaque"><h1>Seu próximo caminho começa aqui.</h1><p>Explore os automóveis cadastrados e encontre o que combina com você.</p><button type="button" onClick={() => usuario ? document.getElementById('titulo-catalogo')?.scrollIntoView({ behavior: 'smooth' }) : trocarTela('cadastro')}>{usuario ? 'Ver automóveis' : 'Criar conta'}</button></div>
           <img src="/carro-home.png" alt="Vista da estrada de dentro de um carro" />
         </section>
         <form className="barra-filtros" onSubmit={(evento) => { evento.preventDefault(); definirFiltrosAplicados({ ...filtros }) }} aria-label="Filtrar automóveis">
@@ -275,28 +283,42 @@ function App() {
           <button type="submit">Buscar</button>
         </form>
         <section className="catalogo-inicial" aria-labelledby="titulo-catalogo">
+          {mensagem && <p className={`mensagem ${mensagem.erro ? 'erro' : 'sucesso'}`} role={mensagem.erro ? 'alert' : 'status'}>{mensagem.texto}</p>}
+          {usuario && usuario.perfil !== 'CLIENTE' && <form id="cadastro-automovel" onSubmit={salvarAutomovel} className="formulario-automovel formulario-automovel-home"><fieldset disabled={carregando}>
+            <h2>{automovelEmEdicao ? 'Editar automóvel' : 'Cadastrar automóvel'}</h2>
+            <div className="grade-campos">
+              <label htmlFor="matricula">Matrícula<input id="matricula" value={formularioAutomovel.matricula} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, matricula: evento.target.value }))} required maxLength={40} /></label>
+              <label htmlFor="placa">Placa<input id="placa" value={formularioAutomovel.placa} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, placa: evento.target.value.toUpperCase() }))} required maxLength={7} pattern="[A-Za-z]{3}[0-9][A-Za-z0-9][0-9]{2}" title="Use o formato ABC1234 ou ABC1D23" /></label>
+              <label htmlFor="marca">Marca<input id="marca" value={formularioAutomovel.marca} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, marca: evento.target.value }))} required maxLength={80} /></label>
+              <label htmlFor="modelo">Modelo<input id="modelo" value={formularioAutomovel.modelo} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, modelo: evento.target.value }))} required maxLength={80} /></label>
+              <label htmlFor="ano">Ano<input id="ano" type="number" min="1886" max={new Date().getFullYear() + 1} value={formularioAutomovel.ano} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, ano: evento.target.value }))} required /></label>
+            </div>
+            <div className="acoes"><button type="submit">{automovelEmEdicao ? 'Salvar alterações' : 'Cadastrar automóvel'}</button>{automovelEmEdicao && <button type="button" className="secundario" onClick={() => { definirAutomovelEmEdicao(null); definirFormularioAutomovel(automovelVazio) }}>Cancelar edição</button>}</div>
+          </fieldset></form>}
           <div className="cabecalho-catalogo"><div><h2 id="titulo-catalogo">Automóveis</h2><p>{filtrosAtivos ? `${automoveisFiltrados.length} resultado${automoveisFiltrados.length === 1 ? '' : 's'} encontrado${automoveisFiltrados.length === 1 ? '' : 's'}.` : 'Veja os veículos cadastrados no sistema.'}</p></div><div className="acoes-catalogo">{filtrosAtivos && <button type="button" className="secundario" onClick={() => { definirFiltros(filtrosVazios); definirFiltrosAplicados(filtrosVazios) }}>Limpar filtros</button>}<button type="button" className="secundario" onClick={carregarAutomoveis} disabled={carregandoLista}>Atualizar lista</button></div></div>
           {erroAutomoveis && <p className="mensagem erro" role="alert">{erroAutomoveis}</p>}
           {carregandoLista ? <p className="estado-lista">Carregando automóveis...</p> : !erroAutomoveis && automoveisFiltrados.length === 0 ? <p className="estado-lista">{automoveis.length ? 'Nenhum automóvel corresponde aos filtros.' : 'Nenhum automóvel cadastrado ainda.'}</p> : null}
-          <div className="grade-automoveis">{automoveisFiltrados.map((automovel) => <article className="cartao-automovel" key={automovel.id}><span className="selo-ano">{automovel.ano}</span><h3>{automovel.marca} {automovel.modelo}</h3><p>Placa {automovel.placa}</p><p>Matrícula {automovel.matricula}</p></article>)}</div>
+          <div className="grade-automoveis">{automoveisFiltrados.map((automovel) => <article className="cartao-automovel" key={automovel.id}><span className="selo-ano">{automovel.ano}</span><h3>{automovel.marca} {automovel.modelo}</h3><p>Placa {automovel.placa}</p><p>Matrícula {automovel.matricula}</p>{usuario && usuario.perfil !== 'CLIENTE' && <div className="acoes acoes-automovel"><button type="button" className="secundario" onClick={() => editarAutomovel(automovel)} disabled={carregando}>Editar</button><button type="button" className="secundario" onClick={() => excluirAutomovel(automovel)} disabled={carregando}>Excluir</button></div>}</article>)}</div>
         </section>
       </main>
+      </>
     )
   }
 
   return (
+    <>
+    {cabecalho}
     <main className={`pagina ${usuario ? 'pagina-larga' : ''} ${!usuario ? 'pagina-acesso' : ''}`}>
       {!usuario && <aside className="painel-ilustracao" aria-label="Imagem de automóvel"><img src="/carro-estrada.png" alt="Carro em uma estrada cercada por árvores" /></aside>}
       <div className="conteudo-pagina">
       <header className="cabecalho">
-        <button type="button" className="voltar-inicio" onClick={() => trocarTela('inicio')}>← Início</button>
-        <h1>Aluguel de carros</h1>
-        <p>{usuario ? 'Minha conta' : 'Cadastro e acesso ao sistema'}</p>
+        <h1>{usuario ? 'Minha conta' : 'Bem-vindo'}</h1>
+        <p>{usuario ? 'Seus dados no sistema' : 'Entre ou crie sua conta para continuar'}</p>
       </header>
       <section className="cartao" aria-labelledby="titulo">
         {usuario ? (
           <>
-            <div className="topo-conta"><div><h2 id="titulo">Olá, {usuario.nome}!</h2><p className="descricao">{perfis[usuario.perfil] || usuario.perfil} · {usuario.nomeUsuario}</p></div><button type="button" className="secundario" onClick={sair}>Sair</button></div>
+            <div className="topo-conta"><div><h2 id="titulo">Olá, {usuario.nome}!</h2><p className="descricao">{perfis[usuario.perfil] || usuario.perfil} · {usuario.nomeUsuario}</p></div></div>
             {mensagem && <p className={`mensagem ${mensagem.erro ? 'erro' : 'sucesso'}`} role={mensagem.erro ? 'alert' : 'status'}>{mensagem.texto}</p>}
             {usuario.perfil === 'CLIENTE' ? (
               <>
@@ -320,22 +342,6 @@ function App() {
                 </form>
               </>
             ) : <button type="button" onClick={consultarUsuario} disabled={carregando}>Atualizar dados</button>}
-            <div className="titulo-secao secao-automoveis"><div><h3>Automóveis</h3><p className="descricao">{automoveis.length ? `${automoveis.length} veículo${automoveis.length === 1 ? '' : 's'} cadastrado${automoveis.length === 1 ? '' : 's'}.` : 'Nenhum automóvel cadastrado.'}</p></div><button type="button" className="secundario" onClick={carregarAutomoveis} disabled={carregando}>Atualizar lista</button></div>
-            {usuario.perfil !== 'CLIENTE' && <form onSubmit={salvarAutomovel} className="formulario-automovel"><fieldset disabled={carregando}>
-              <h3>{automovelEmEdicao ? 'Editar automóvel' : 'Cadastrar automóvel'}</h3>
-              <div className="grade-campos">
-                <label htmlFor="matricula">Matrícula<input id="matricula" value={formularioAutomovel.matricula} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, matricula: evento.target.value }))} required maxLength={40} /></label>
-                <label htmlFor="placa">Placa<input id="placa" value={formularioAutomovel.placa} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, placa: evento.target.value.toUpperCase() }))} required maxLength={7} pattern="[A-Za-z]{3}[0-9][A-Za-z0-9][0-9]{2}" title="Use o formato ABC1234 ou ABC1D23" /></label>
-                <label htmlFor="marca">Marca<input id="marca" value={formularioAutomovel.marca} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, marca: evento.target.value }))} required maxLength={80} /></label>
-                <label htmlFor="modelo">Modelo<input id="modelo" value={formularioAutomovel.modelo} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, modelo: evento.target.value }))} required maxLength={80} /></label>
-                <label htmlFor="ano">Ano<input id="ano" type="number" min="1886" max={new Date().getFullYear() + 1} value={formularioAutomovel.ano} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, ano: evento.target.value }))} required /></label>
-              </div>
-              <div className="acoes"><button type="submit">{automovelEmEdicao ? 'Salvar alterações' : 'Cadastrar automóvel'}</button>{automovelEmEdicao && <button type="button" className="secundario" onClick={() => { definirAutomovelEmEdicao(null); definirFormularioAutomovel(automovelVazio) }}>Cancelar edição</button>}</div>
-            </fieldset></form>}
-            <div className="lista-automoveis">{automoveis.map((automovel) => <article className="item-automovel" key={automovel.id}>
-              <div><strong>{automovel.marca} {automovel.modelo}</strong><p>{automovel.ano} · Placa {automovel.placa} · Matrícula {automovel.matricula}</p></div>
-              {usuario.perfil !== 'CLIENTE' && <div className="acoes"><button type="button" className="secundario" onClick={() => editarAutomovel(automovel)} disabled={carregando}>Editar</button><button type="button" className="secundario" onClick={() => excluirAutomovel(automovel)} disabled={carregando}>Excluir</button></div>}
-            </article>)}</div>
           </>
         ) : (
           <>
@@ -356,6 +362,7 @@ function App() {
       </section>
       </div>
     </main>
+    </>
   )
 }
 

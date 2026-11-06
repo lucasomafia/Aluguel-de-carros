@@ -1,0 +1,9 @@
+CREATE TABLE usuarios (
+    id UUID PRIMARY KEY,
+    nome VARCHAR(120) NOT NULL,
+    nome_usuario VARCHAR(60) NOT NULL UNIQUE,
+    senha_hash VARCHAR(100) NOT NULL,
+    perfil VARCHAR(20) NOT NULL CHECK (perfil IN ('CLIENTE', 'EMPRESA', 'BANCO'))
+);
+
+ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;

@@ -1,6 +1,7 @@
 package br.com.aluguel.controller;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.*;
@@ -24,5 +25,11 @@ public class ApiExceptionHandler {
     ResponseEntity<ProblemDetail> conflito() {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(
             ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Cadastro em conflito com um registro existente."));
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    ResponseEntity<ProblemDetail> pedidoAlterado() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+            ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Este pedido foi alterado. Atualize a lista e tente novamente."));
     }
 }

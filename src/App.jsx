@@ -31,6 +31,13 @@ async function chamarApi(caminho, metodo, autorizacao, dados) {
 const dadosVazios = { rg: '', cpf: '', endereco: '', profissao: '', vinculos: [] }
 const automovelVazio = { matricula: '', ano: '', marca: '', modelo: '', placa: '' }
 const filtrosVazios = { busca: '', marca: '', ano: '' }
+const pedidoVazio = { automovelId: '', dataRetirada: '', dataDevolucao: '' }
+const dataHoje = () => {
+  const data = new Date()
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`
+}
+const formatarData = (data) => new Date(`${data}T12:00:00`).toLocaleDateString('pt-BR')
+const nomesStatus = { PENDENTE_ANALISE: 'Pendente de análise', APROVADO_AGUARDANDO_CONTRATO: 'Aguardando contrato', REJEITADO: 'Rejeitado', CANCELADO: 'Cancelado' }
 
 function App() {
   const [tela, definirTela] = useState('inicio')
@@ -47,6 +54,13 @@ function App() {
   const [filtrosAplicados, definirFiltrosAplicados] = useState(filtrosVazios)
   const [formularioAutomovel, definirFormularioAutomovel] = useState(automovelVazio)
   const [automovelEmEdicao, definirAutomovelEmEdicao] = useState(null)
+  const [pedidos, definirPedidos] = useState([])
+  const [formularioPedido, definirFormularioPedido] = useState(pedidoVazio)
+  const [erroPedidos, definirErroPedidos] = useState(null)
+  const [pedidoEmEdicao, definirPedidoEmEdicao] = useState(null)
+  const [formularioEdicaoPedido, definirFormularioEdicaoPedido] = useState(pedidoVazio)
+  const [pedidoEmAvaliacao, definirPedidoEmAvaliacao] = useState(null)
+  const [parecer, definirParecer] = useState('')
   const [carregando, definirCarregando] = useState(false)
   const [mensagem, definirMensagem] = useState(null)
   const autorizacao = useRef(null)
@@ -107,6 +121,16 @@ function App() {
     }
   }
 
+  async function carregarPedidos(perfil = usuario?.perfil) {
+    definirErroPedidos(null)
+    try {
+      const lista = await chamarApi(perfil === 'CLIENTE' ? 'pedidos/me' : 'pedidos', 'GET', autorizacao.current)
+      definirPedidos(perfil === 'CLIENTE' ? lista : lista.map((item) => ({ ...item.pedido, cliente: item.cliente })))
+    } catch (erro) {
+      definirErroPedidos(erro.message)
+    }
+  }
+
   async function enviarAcesso(evento) {
     evento.preventDefault()
     definirMensagem(null)
@@ -129,7 +153,10 @@ function App() {
         autorizacao.current = credencial
         definirUsuario(dadosUsuario)
         definirSenha('')
-        if (dadosUsuario.perfil === 'CLIENTE') await carregarCliente()
+        if (dadosUsuario.perfil === 'CLIENTE') {
+          await carregarCliente()
+        }
+        await carregarPedidos(dadosUsuario.perfil)
         await carregarAutomoveis()
         definirTela('inicio')
       }
@@ -146,6 +173,7 @@ function App() {
     try {
       definirUsuario(await chamarApi('auth/me', 'GET', autorizacao.current))
       if (usuario.perfil === 'CLIENTE') await carregarCliente()
+      await carregarPedidos(usuario.perfil)
       mostrarMensagem(false, 'Dados atualizados com sucesso.')
     } catch (erro) {
       mostrarMensagem(true, erro.message)
@@ -243,6 +271,106 @@ function App() {
     }
   }
 
+  function selecionarAutomovel(automovel) {
+    definirFormularioPedido({ ...pedidoVazio, automovelId: automovel.id })
+    definirMensagem(null)
+    requestAnimationFrame(() => document.getElementById('formulario-pedido')?.scrollIntoView({ behavior: 'smooth' }))
+  }
+
+  async function criarPedido(evento) {
+    evento.preventDefault()
+    definirCarregando(true)
+    definirMensagem(null)
+    try {
+      await chamarApi('pedidos', 'POST', autorizacao.current, formularioPedido)
+      definirFormularioPedido(pedidoVazio)
+      await carregarPedidos()
+      definirTela('conta')
+      mostrarMensagem(false, 'Pedido enviado. Acompanhe o status abaixo.')
+    } catch (erro) {
+      mostrarMensagem(true, erro.message)
+    } finally {
+      definirCarregando(false)
+    }
+  }
+
+  function editarPedido(pedido) {
+    definirPedidoEmEdicao(pedido.id)
+    definirPedidoEmAvaliacao(null)
+    definirFormularioEdicaoPedido({ automovelId: pedido.automovel.id,
+      dataRetirada: pedido.dataRetirada, dataDevolucao: pedido.dataDevolucao })
+    definirMensagem(null)
+  }
+
+  async function modificarPedido(evento) {
+    evento.preventDefault()
+    definirCarregando(true)
+    definirMensagem(null)
+    try {
+      await chamarApi(usuario.perfil === 'CLIENTE' ? `pedidos/me/${pedidoEmEdicao}` : `pedidos/${pedidoEmEdicao}`,
+        'PUT', autorizacao.current, formularioEdicaoPedido)
+      definirPedidoEmEdicao(null)
+      await carregarPedidos()
+      mostrarMensagem(false, 'Pedido atualizado.')
+    } catch (erro) {
+      mostrarMensagem(true, erro.message)
+    } finally {
+      definirCarregando(false)
+    }
+  }
+
+  async function cancelarPedido(pedido) {
+    if (!window.confirm(`Cancelar o pedido de ${pedido.automovel.marca} ${pedido.automovel.modelo}?`)) return
+    definirCarregando(true)
+    definirMensagem(null)
+    try {
+      await chamarApi(`pedidos/me/${pedido.id}/cancelar`, 'PATCH', autorizacao.current)
+      definirPedidoEmEdicao(null)
+      await carregarPedidos()
+      mostrarMensagem(false, 'Pedido cancelado.')
+    } catch (erro) {
+      mostrarMensagem(true, erro.message)
+    } finally {
+      definirCarregando(false)
+    }
+  }
+
+  async function avaliarPedido(evento, aprovado) {
+    evento.preventDefault()
+    definirCarregando(true)
+    definirMensagem(null)
+    try {
+      await chamarApi(`pedidos/${pedidoEmAvaliacao}/avaliacao`, 'POST', autorizacao.current, { aprovado, parecer })
+      definirPedidoEmAvaliacao(null)
+      definirParecer('')
+      await carregarPedidos()
+      mostrarMensagem(false, aprovado ? 'Pedido aprovado e aguardando contrato.' : 'Pedido rejeitado.')
+    } catch (erro) {
+      mostrarMensagem(true, erro.message)
+    } finally {
+      definirCarregando(false)
+    }
+  }
+
+  function renderizarPedidos() {
+    const agente = usuario.perfil !== 'CLIENTE'
+    return <>
+      <div className="titulo-secao pedidos-titulo"><div><h3>{agente ? 'Pedidos para análise' : 'Meus pedidos'}</h3><p className="descricao">{agente ? 'Consulte, modifique e avalie as solicitações.' : 'Acompanhe e gerencie suas solicitações de aluguel.'}</p></div><button type="button" className="secundario" onClick={() => carregarPedidos()} disabled={carregando}>Atualizar</button></div>
+      {erroPedidos && <p className="mensagem erro" role="alert">{erroPedidos}</p>}
+      {!erroPedidos && pedidos.length === 0 && <p className="descricao">{agente ? 'Nenhum pedido recebido.' : 'Você ainda não fez nenhum pedido.'}</p>}
+      <div className="lista-pedidos">{pedidos.map((pedido) => <article className="item-pedido" key={pedido.id}>
+        <div className="dados-pedido"><strong>{pedido.automovel.marca} {pedido.automovel.modelo}</strong><p>{formatarData(pedido.dataRetirada)} a {formatarData(pedido.dataDevolucao)}</p>
+          {agente && <div className="dados-cliente-pedido"><p><strong>Cliente:</strong> {pedido.cliente?.nome || 'Dados não disponíveis'}</p>{pedido.cliente && <><p>CPF: {pedido.cliente.cpf} · RG: {pedido.cliente.rg}</p><p>Profissão: {pedido.cliente.profissao}</p><p>Endereço: {pedido.cliente.endereco}</p>{pedido.cliente.vinculos.map((vinculo, indice) => <p key={indice}>{vinculo.entidadeEmpregadora}: R$ {Number(vinculo.rendimento).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>)}</>}</div>}
+          {pedido.parecer && <p className="parecer-pedido"><strong>Parecer:</strong> {pedido.parecer}{pedido.avaliadoPor ? ` · ${pedido.avaliadoPor}` : ''}</p>}
+        </div>
+        <span className="selo-status">{nomesStatus[pedido.status] || pedido.status}</span>
+        {pedido.status === 'PENDENTE_ANALISE' && <div className="acoes acoes-pedido"><button type="button" className="secundario" onClick={() => editarPedido(pedido)} disabled={carregando}>Modificar</button>{agente ? <button type="button" onClick={() => { definirPedidoEmAvaliacao(pedido.id); definirPedidoEmEdicao(null); definirParecer('') }} disabled={carregando}>Avaliar</button> : <button type="button" className="secundario" onClick={() => cancelarPedido(pedido)} disabled={carregando}>Cancelar pedido</button>}</div>}
+        {pedidoEmEdicao === pedido.id && <form className="formulario-pedido-conta" onSubmit={modificarPedido}><fieldset disabled={carregando}><div className="grade-campos"><label htmlFor={`automovel-pedido-${pedido.id}`}>Automóvel<select id={`automovel-pedido-${pedido.id}`} value={formularioEdicaoPedido.automovelId} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, automovelId: evento.target.value }))} required>{automoveis.map((automovel) => <option value={automovel.id} key={automovel.id}>{automovel.marca} {automovel.modelo}</option>)}</select></label><label htmlFor={`retirada-pedido-${pedido.id}`}>Retirada<input id={`retirada-pedido-${pedido.id}`} type="date" min={dataHoje()} value={formularioEdicaoPedido.dataRetirada} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, dataRetirada: evento.target.value }))} required /></label><label htmlFor={`devolucao-pedido-${pedido.id}`}>Devolução<input id={`devolucao-pedido-${pedido.id}`} type="date" min={formularioEdicaoPedido.dataRetirada || dataHoje()} value={formularioEdicaoPedido.dataDevolucao} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, dataDevolucao: evento.target.value }))} required /></label></div><div className="acoes"><button type="submit">Salvar alterações</button><button type="button" className="secundario" onClick={() => definirPedidoEmEdicao(null)}>Fechar</button></div></fieldset></form>}
+        {agente && pedidoEmAvaliacao === pedido.id && <form className="formulario-pedido-conta" onSubmit={(evento) => avaliarPedido(evento, true)}><fieldset disabled={carregando}><label htmlFor={`parecer-${pedido.id}`}>Parecer financeiro<textarea id={`parecer-${pedido.id}`} value={parecer} onChange={(evento) => definirParecer(evento.target.value)} required maxLength={1000} rows={4} /></label><div className="acoes"><button type="submit">Aprovar</button><button type="button" className="secundario" onClick={(evento) => avaliarPedido(evento, false)} disabled={!parecer.trim()}>Rejeitar</button><button type="button" className="secundario" onClick={() => definirPedidoEmAvaliacao(null)}>Fechar</button></div></fieldset></form>}
+      </article>)}</div>
+    </>
+  }
+
   function sair() {
     autorizacao.current = null
     definirUsuario(null)
@@ -250,6 +378,13 @@ function App() {
     definirFormularioCliente(dadosVazios)
     definirFormularioAutomovel(automovelVazio)
     definirAutomovelEmEdicao(null)
+    definirPedidos([])
+    definirFormularioPedido(pedidoVazio)
+    definirErroPedidos(null)
+    definirPedidoEmEdicao(null)
+    definirFormularioEdicaoPedido(pedidoVazio)
+    definirPedidoEmAvaliacao(null)
+    definirParecer('')
     definirNome('')
     definirNomeUsuario('')
     definirSenha('')
@@ -284,6 +419,16 @@ function App() {
         </form>
         <section className="catalogo-inicial" aria-labelledby="titulo-catalogo">
           {mensagem && <p className={`mensagem ${mensagem.erro ? 'erro' : 'sucesso'}`} role={mensagem.erro ? 'alert' : 'status'}>{mensagem.texto}</p>}
+          {usuario?.perfil === 'CLIENTE' && formularioPedido.automovelId && <form id="formulario-pedido" className="formulario-automovel-home" onSubmit={criarPedido}><fieldset disabled={carregando}>
+            <h2>Solicitar aluguel</h2>
+            <p className="descricao">{automoveis.find((automovel) => automovel.id === formularioPedido.automovelId)?.marca} {automoveis.find((automovel) => automovel.id === formularioPedido.automovelId)?.modelo}</p>
+            <div className="grade-campos">
+              <label htmlFor="data-retirada">Data de retirada<input id="data-retirada" type="date" min={dataHoje()} value={formularioPedido.dataRetirada} onChange={(evento) => definirFormularioPedido((atual) => ({ ...atual, dataRetirada: evento.target.value }))} required /></label>
+              <label htmlFor="data-devolucao">Data de devolução<input id="data-devolucao" type="date" min={formularioPedido.dataRetirada || dataHoje()} value={formularioPedido.dataDevolucao} onChange={(evento) => definirFormularioPedido((atual) => ({ ...atual, dataDevolucao: evento.target.value }))} required /></label>
+            </div>
+            {!cliente && <p className="descricao">Complete seus dados em Minha conta antes de enviar o pedido.</p>}
+            <div className="acoes"><button type="submit" disabled={!cliente}>Enviar pedido</button><button type="button" className="secundario" onClick={() => definirFormularioPedido(pedidoVazio)}>Cancelar</button></div>
+          </fieldset></form>}
           {usuario && usuario.perfil !== 'CLIENTE' && <form id="cadastro-automovel" onSubmit={salvarAutomovel} className="formulario-automovel formulario-automovel-home"><fieldset disabled={carregando}>
             <h2>{automovelEmEdicao ? 'Editar automóvel' : 'Cadastrar automóvel'}</h2>
             <div className="grade-campos">
@@ -298,7 +443,7 @@ function App() {
           <div className="cabecalho-catalogo"><div><h2 id="titulo-catalogo">Automóveis</h2><p>{filtrosAtivos ? `${automoveisFiltrados.length} resultado${automoveisFiltrados.length === 1 ? '' : 's'} encontrado${automoveisFiltrados.length === 1 ? '' : 's'}.` : 'Veja os veículos cadastrados no sistema.'}</p></div><div className="acoes-catalogo">{filtrosAtivos && <button type="button" className="secundario" onClick={() => { definirFiltros(filtrosVazios); definirFiltrosAplicados(filtrosVazios) }}>Limpar filtros</button>}<button type="button" className="secundario" onClick={carregarAutomoveis} disabled={carregandoLista}>Atualizar lista</button></div></div>
           {erroAutomoveis && <p className="mensagem erro" role="alert">{erroAutomoveis}</p>}
           {carregandoLista ? <p className="estado-lista">Carregando automóveis...</p> : !erroAutomoveis && automoveisFiltrados.length === 0 ? <p className="estado-lista">{automoveis.length ? 'Nenhum automóvel corresponde aos filtros.' : 'Nenhum automóvel cadastrado ainda.'}</p> : null}
-          <div className="grade-automoveis">{automoveisFiltrados.map((automovel) => <article className="cartao-automovel" key={automovel.id}><span className="selo-ano">{automovel.ano}</span><h3>{automovel.marca} {automovel.modelo}</h3><p>Placa {automovel.placa}</p><p>Matrícula {automovel.matricula}</p>{usuario && usuario.perfil !== 'CLIENTE' && <div className="acoes acoes-automovel"><button type="button" className="secundario" onClick={() => editarAutomovel(automovel)} disabled={carregando}>Editar</button><button type="button" className="secundario" onClick={() => excluirAutomovel(automovel)} disabled={carregando}>Excluir</button></div>}</article>)}</div>
+          <div className="grade-automoveis">{automoveisFiltrados.map((automovel) => <article className="cartao-automovel" key={automovel.id}><span className="selo-ano">{automovel.ano}</span><h3>{automovel.marca} {automovel.modelo}</h3><p>Placa {automovel.placa}</p><p>Matrícula {automovel.matricula}</p>{usuario?.perfil === 'CLIENTE' && <div className="acoes acoes-automovel"><button type="button" onClick={() => selecionarAutomovel(automovel)}>Solicitar aluguel</button></div>}{usuario && usuario.perfil !== 'CLIENTE' && <div className="acoes acoes-automovel"><button type="button" className="secundario" onClick={() => editarAutomovel(automovel)} disabled={carregando}>Editar</button><button type="button" className="secundario" onClick={() => excluirAutomovel(automovel)} disabled={carregando}>Excluir</button></div>}</article>)}</div>
         </section>
       </main>
       </>
@@ -340,8 +485,9 @@ function App() {
                     <div className="acoes"><button type="submit">{carregando ? 'Salvando...' : 'Salvar dados'}</button>{cliente && <button type="button" className="secundario" onClick={excluirCliente}>Excluir meus dados</button>}</div>
                   </fieldset>
                 </form>
+                {renderizarPedidos()}
               </>
-            ) : <button type="button" onClick={consultarUsuario} disabled={carregando}>Atualizar dados</button>}
+            ) : renderizarPedidos()}
           </>
         ) : (
           <>

@@ -1,0 +1,5 @@
+ALTER TABLE pedidos
+    ADD COLUMN versao BIGINT NOT NULL DEFAULT 0,
+    ADD COLUMN parecer VARCHAR(1000),
+    ADD COLUMN avaliado_por_id UUID REFERENCES usuarios(id),
+    ADD COLUMN avaliado_em TIMESTAMP WITH TIME ZONE;

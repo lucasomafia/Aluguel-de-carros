@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 
 async function chamarApi(caminho, metodo, autorizacao, dados) {
   let resposta
@@ -40,7 +40,7 @@ const formatarData = (data) => new Date(`${data}T12:00:00`).toLocaleDateString('
 const nomesStatus = { PENDENTE_ANALISE: 'Pendente de análise', APROVADO_AGUARDANDO_CONTRATO: 'Aguardando contrato', CONTRATADO: 'Contrato realizado', REJEITADO: 'Rejeitado', CANCELADO: 'Cancelado' }
 
 function App() {
-  const [tela, definirTela] = useState('inicio')
+  const [tela, definirTela] = useState('login')
   const [nome, definirNome] = useState('')
   const [nomeUsuario, definirNomeUsuario] = useState('')
   const [senha, definirSenha] = useState('')
@@ -83,15 +83,6 @@ function App() {
       && (!filtrosAplicados.ano || String(automovel.ano) === filtrosAplicados.ano)
   })
   const filtrosAtivos = Boolean(filtrosAplicados.busca || filtrosAplicados.marca || filtrosAplicados.ano)
-
-  useEffect(() => {
-    let ativo = true
-    chamarApi('automoveis', 'GET', null)
-      .then((lista) => { if (ativo) definirAutomoveis(lista) })
-      .catch((erro) => { if (ativo) definirErroAutomoveis(erro.message) })
-      .finally(() => { if (ativo) definirCarregandoLista(false) })
-    return () => { ativo = false }
-  }, [])
 
   function mostrarMensagem(erro, texto) { definirMensagem({ erro, texto }) }
 
@@ -179,15 +170,16 @@ function App() {
         const dadosUsuario = await chamarApi('auth/login', 'POST', credencial)
         autorizacao.current = credencial
         definirUsuario(dadosUsuario)
-        definirSenha('')
-        if (dadosUsuario.perfil === 'CLIENTE') {
-          await carregarCliente()
-        }
-        await carregarPedidos(dadosUsuario.perfil)
-        await carregarContratos(dadosUsuario.perfil)
-        await carregarCreditos(dadosUsuario.perfil)
-        await carregarAutomoveis()
         definirTela('inicio')
+        definirSenha('')
+        const carregamentos = [
+          carregarPedidos(dadosUsuario.perfil),
+          carregarContratos(dadosUsuario.perfil),
+          carregarCreditos(dadosUsuario.perfil),
+          carregarAutomoveis(),
+        ]
+        if (dadosUsuario.perfil === 'CLIENTE') carregamentos.push(carregarCliente())
+        await Promise.all(carregamentos)
       }
     } catch (erro) {
       mostrarMensagem(true, erro.message)
@@ -467,6 +459,9 @@ function App() {
     autorizacao.current = null
     definirUsuario(null)
     definirCliente(null)
+    definirAutomoveis([])
+    definirCarregandoLista(false)
+    definirErroAutomoveis(null)
     definirFormularioCliente(dadosVazios)
     definirFormularioAutomovel(automovelVazio)
     definirAutomovelEmEdicao(null)
@@ -489,20 +484,21 @@ function App() {
     definirNomeUsuario('')
     definirSenha('')
     definirMensagem(null)
-    definirTela('inicio')
+    definirTela('login')
   }
 
   const cabecalho = (
     <header className="cabecalho-inicial">
-      <button type="button" className="marca-inicial" onClick={() => trocarTela('inicio')}>Aluguel de carros</button>
+      <span className="marca-inicial">Aluguel de carros</span>
       <nav aria-label="Acesso" className="navegacao-inicial">
-        <button type="button" onClick={() => trocarTela(usuario ? 'conta' : 'login')}>{usuario ? 'Minha conta' : 'Entrar'}</button>
-        {usuario && <button type="button" className="secundario" onClick={sair}>Sair</button>}
+        <button type="button" onClick={() => trocarTela(usuario ? tela === 'conta' ? 'inicio' : 'conta' : 'login')}>
+          {usuario && tela === 'conta' ? 'Voltar à home' : 'Minha conta'}
+        </button>
       </nav>
     </header>
   )
 
-  if (tela === 'inicio') {
+  if (tela === 'inicio' && usuario) {
     return (
       <>
       {cabecalho}
@@ -563,7 +559,7 @@ function App() {
       <section className="cartao" aria-labelledby="titulo">
         {usuario ? (
           <>
-            <div className="topo-conta"><div><h2 id="titulo">Olá, {usuario.nome}!</h2><p className="descricao">{perfis[usuario.perfil] || usuario.perfil} · {usuario.nomeUsuario}</p></div></div>
+            <div className="topo-conta"><div><h2 id="titulo">Olá, {usuario.nome}!</h2><p className="descricao">{perfis[usuario.perfil] || usuario.perfil} · {usuario.nomeUsuario}</p></div><button type="button" className="secundario" onClick={sair}>Sair</button></div>
             {mensagem && <p className={`mensagem ${mensagem.erro ? 'erro' : 'sucesso'}`} role={mensagem.erro ? 'alert' : 'status'}>{mensagem.texto}</p>}
             {usuario.perfil === 'CLIENTE' ? (
               <>

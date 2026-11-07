@@ -27,7 +27,6 @@ public class SecurityConfig {
             .requestCache(cacheRequisicoes -> cacheRequisicoes.disable())
             .authorizeHttpRequests(autorizacao -> autorizacao
                 .requestMatchers(HttpMethod.POST, "/api/auth/cadastro").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/automoveis", "/api/automoveis/*").permitAll()
                 .requestMatchers("/error").permitAll()
                 .anyRequest().authenticated())
             .httpBasic(Customizer.withDefaults())

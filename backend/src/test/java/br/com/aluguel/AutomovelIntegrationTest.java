@@ -19,20 +19,22 @@ class AutomovelIntegrationTest {
     private final ObjectMapper conversor = new ObjectMapper();
 
     @Test
-    void agenteGerenciaAutomovelEClienteConsultaSemAlterar() throws Exception {
+    void somenteUsuarioAutenticadoConsultaAutomoveisEAgentePodeGerenciar() throws Exception {
         String nomeCliente = "a" + UUID.randomUUID().toString().replace("-", "");
         enviar("POST", "/api/auth/cadastro", "{\"nome\":\"Cliente\",\"nomeUsuario\":\"%s\",\"senha\":\"Senha@123\"}".formatted(nomeCliente), null);
         String matricula = "MAT" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         String placa = "ABC1D23";
         String dados = "{\"matricula\":\"%s\",\"ano\":2024,\"marca\":\"Fiat\",\"modelo\":\"Argo\",\"placa\":\"%s\"}".formatted(matricula, placa);
-        assertThat(enviar("GET", "/api/automoveis", null, null).statusCode()).isEqualTo(200);
+        assertThat(enviar("GET", "/api/automoveis", null, null).statusCode()).isEqualTo(401);
+        assertThat(enviar("GET", "/api/automoveis", null, nomeCliente).statusCode()).isEqualTo(200);
         assertThat(enviar("POST", "/api/automoveis", dados, nomeCliente).statusCode()).isEqualTo(403);
         var criado = enviar("POST", "/api/automoveis", dados, "empresa");
         assertThat(criado.statusCode()).isEqualTo(201);
         JsonNode json = conversor.readTree(criado.body());
         String id = json.get("id").asText();
         assertThat(criado.body()).doesNotContain("proprietarioId");
-        assertThat(enviar("GET", "/api/automoveis", null, null).body()).contains(id, "Fiat");
+        assertThat(enviar("GET", "/api/automoveis", null, null).statusCode()).isEqualTo(401);
+        assertThat(enviar("GET", "/api/automoveis", null, "empresa").body()).contains(id, "Fiat");
         assertThat(enviar("GET", "/api/automoveis", null, nomeCliente).body()).contains(id, "Fiat");
         assertThat(enviar("GET", "/api/automoveis/" + id, null, nomeCliente).statusCode()).isEqualTo(200);
         assertThat(enviar("POST", "/api/automoveis", dados, "empresa").statusCode()).isEqualTo(409);

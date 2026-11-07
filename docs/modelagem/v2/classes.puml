@@ -1,0 +1,110 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+enum Perfil {
+  CLIENTE
+  EMPRESA
+  BANCO
+}
+
+enum StatusPedido {
+  PENDENTE_ANALISE
+  APROVADO_AGUARDANDO_CONTRATO
+  CONTRATADO
+  REJEITADO
+  CANCELADO
+}
+
+enum TipoPropriedade {
+  CLIENTE
+  EMPRESA
+  BANCO
+}
+
+class Usuario <<entidade>> {
+  id: UUID
+  nome: String
+  nomeUsuario: String
+  senhaHash: String
+  perfil: Perfil
+}
+
+class Cliente <<entidade>> {
+  usuarioId: UUID
+  rg: String
+  cpf: String
+  endereco: String
+  profissao: String
+}
+
+class VinculoEmpregaticio <<componente>> {
+  entidadeEmpregadora: String
+  rendimento: BigDecimal
+}
+
+class Automovel <<entidade>> {
+  id: UUID
+  matricula: String
+  ano: Integer
+  marca: String
+  modelo: String
+  placa: String
+  proprietario: Usuario
+}
+
+class Pedido <<entidade>> {
+  id: UUID
+  dataRetirada: LocalDate
+  dataDevolucao: LocalDate
+  status: StatusPedido
+  parecer: String
+  avaliadoEm: OffsetDateTime
+  versao: long
+}
+
+class Contrato <<entidade>> {
+  id: UUID
+  tipoPropriedade: TipoPropriedade
+  executadoEm: OffsetDateTime
+}
+
+class ContratoCredito <<entidade>> {
+  id: UUID
+  valor: BigDecimal
+  parcelas: int
+  concedidoEm: OffsetDateTime
+}
+
+Usuario "1" -- "0..1" Cliente : dados de cliente
+Cliente "1" *-- "0..3" VinculoEmpregaticio : rendimentos
+Usuario "1" -- "0..*" Pedido : cliente
+Automovel "1" -- "0..*" Pedido : automóvel solicitado
+Usuario "0..1" -- "0..*" Pedido : agente avaliador
+Pedido "1" -- "0..1" Contrato : execução
+Usuario "1" -- "0..*" Contrato : proprietário escolhido
+Contrato "1" -- "0..1" ContratoCredito : crédito opcional
+Usuario "1" -- "0..*" ContratoCredito : banco concedente
+Usuario "1" -- "0..*" Automovel : proprietário atual
+
+note bottom of Cliente
+  Cliente e Usuario compartilham a chave.
+  O cliente pode informar até três vínculos
+  empregatícios e rendimentos.
+end note
+
+note bottom of Contrato
+  O automóvel do contrato é obtido pelo pedido
+  associado, que referencia o automóvel.
+  A execução atualiza o status do pedido
+  e o proprietário atual do automóvel.
+  O proprietário é o cliente ou o agente
+  que aprovou o pedido.
+end note
+
+note bottom of ContratoCredito
+  Crédito opcional associado a um contrato;
+  valor e quantidade de parcelas (1 a 120).
+  Não há cálculo de juros ou cronograma
+  de pagamento nesta versão.
+end note
+@enduml

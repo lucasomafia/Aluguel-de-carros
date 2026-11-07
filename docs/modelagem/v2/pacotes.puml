@@ -1,0 +1,81 @@
+@startuml
+skinparam packageStyle rectangle
+title Visão lógica implementada — Sistema de Aluguel de Carros
+
+package "Interface Web — React + Vite" as web {
+  [App.jsx\nTelas e fluxos por perfil] as app
+  [index.css\nEstilos e layout] as estilos
+  [Cliente HTTP\nrequisições /api] as http
+  app --> http
+  app --> estilos
+}
+
+package "Servidor — Java 25 / Spring Boot 4" as servidor {
+  package "config" {
+    [SecurityConfig]
+    [AgenteInicialConfig]
+  }
+  package "controller" {
+    [AuthController]
+    [ClienteController]
+    [AutomovelController]
+    [PedidoController]
+    [ContratoController]
+    [CreditoController]
+    [ApiExceptionHandler]
+  }
+  package "dto" {
+    [Requisições e respostas da API]
+  }
+  package "service" {
+    [UsuarioService]
+    [ClienteService]
+    [AutomovelService]
+    [PedidoService]
+    [ContratoService]
+    [CreditoService]
+  }
+  package "repository" {
+    [Repositórios Spring Data]
+  }
+  package "model" {
+    [Entidades e enums]
+  }
+}
+
+database "Supabase\nPostgreSQL" as banco
+folder "Flyway\nMigrações V1–V7" as migracoes
+
+http --> [AuthController] : HTTP / JSON
+[AuthController] --> [UsuarioService]
+[ClienteController] --> [ClienteService]
+[AutomovelController] --> [AutomovelService]
+[PedidoController] --> [PedidoService]
+[ContratoController] --> [ContratoService]
+[CreditoController] --> [CreditoService]
+[ClienteController] ..> [Requisições e respostas da API]
+[PedidoController] ..> [Requisições e respostas da API]
+[ContratoController] ..> [Requisições e respostas da API]
+[CreditoController] ..> [Requisições e respostas da API]
+[UsuarioService] --> [Repositórios Spring Data]
+[ClienteService] --> [Repositórios Spring Data]
+[AutomovelService] --> [Repositórios Spring Data]
+[PedidoService] --> [Repositórios Spring Data]
+[ContratoService] --> [Repositórios Spring Data]
+[CreditoService] --> [Repositórios Spring Data]
+[Repositórios Spring Data] --> [Entidades e enums]
+[Repositórios Spring Data] --> banco
+migracoes --> banco
+
+note bottom of servidor
+  MVC: controllers recebem as chamadas,
+  services aplicam as regras e repositories
+  acessam os dados. A configuração restringe
+  operações conforme autenticação e perfil.
+end note
+
+note bottom of web
+  O proxy de desenvolvimento encaminha /api
+  ao servidor Spring Boot.
+end note
+@enduml

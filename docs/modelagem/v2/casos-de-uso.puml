@@ -1,0 +1,69 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor Cliente
+actor Agente
+actor Empresa
+actor Banco
+
+Agente <|-- Empresa
+Agente <|-- Banco
+
+rectangle "Sistema de Aluguel de Carros" {
+  usecase "Cadastrar conta de cliente" as UC_Cadastro
+  usecase "Entrar no sistema" as UC_Login
+  usecase "Consultar e atualizar dados\ne rendimentos" as UC_Dados
+  usecase "Consultar automóveis" as UC_Automoveis
+  usecase "Criar pedido de aluguel" as UC_CriarPedido
+  usecase "Consultar pedidos e status" as UC_ConsultarPedido
+  usecase "Modificar pedido" as UC_ModificarPedido
+  usecase "Cancelar pedido" as UC_CancelarPedido
+  usecase "Consultar pedidos para análise" as UC_AnalisarPedidos
+  usecase "Atualizar pedido" as UC_AtualizarPedido
+  usecase "Avaliar situação financeira" as UC_Avaliar
+  usecase "Executar contrato de aluguel" as UC_Contrato
+  usecase "Definir proprietário do automóvel" as UC_Proprietario
+  usecase "Conceder crédito vinculado\nao contrato" as UC_Credito
+  usecase "Consultar créditos concedidos" as UC_ConsultarCredito
+  usecase "Gerenciar automóveis" as UC_GerenciarAutomovel
+}
+
+Cliente --> UC_Cadastro
+Cliente --> UC_Login
+Cliente --> UC_Dados
+Cliente --> UC_Automoveis
+Cliente --> UC_CriarPedido
+Cliente --> UC_ConsultarPedido
+Cliente --> UC_ModificarPedido
+Cliente --> UC_CancelarPedido
+Cliente --> UC_Contrato
+UC_Contrato .> UC_Proprietario : <<include>>
+
+Agente --> UC_Login
+Agente --> UC_AnalisarPedidos
+Agente --> UC_AtualizarPedido
+Agente --> UC_Avaliar
+Agente --> UC_GerenciarAutomovel
+
+Banco --> UC_Credito
+Banco --> UC_ConsultarCredito
+Empresa --> UC_AnalisarPedidos
+
+note right of UC_Cadastro
+  O cadastro público cria contas de cliente.
+  Contas de agentes são provisionadas
+  para a instituição aderente.
+end note
+
+note bottom of UC_Proprietario
+  O cliente pode ficar como proprietário,
+  ou o agente que aprovou o pedido
+  (empresa ou banco).
+end note
+
+note bottom of UC_Credito
+  Opcional: um crédito por contrato executado.
+  O banco registra valor e número de parcelas.
+end note
+@enduml

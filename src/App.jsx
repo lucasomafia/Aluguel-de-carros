@@ -65,6 +65,10 @@ function App() {
   const [erroContratos, definirErroContratos] = useState(null)
   const [contratoEmExecucao, definirContratoEmExecucao] = useState(null)
   const [tipoPropriedade, definirTipoPropriedade] = useState('CLIENTE')
+  const [creditos, definirCreditos] = useState([])
+  const [erroCreditos, definirErroCreditos] = useState(null)
+  const [creditoEmCadastro, definirCreditoEmCadastro] = useState(null)
+  const [formularioCredito, definirFormularioCredito] = useState({ valor: '', parcelas: '' })
   const [carregando, definirCarregando] = useState(false)
   const [mensagem, definirMensagem] = useState(null)
   const autorizacao = useRef(null)
@@ -144,6 +148,16 @@ function App() {
     }
   }
 
+  async function carregarCreditos(perfil = usuario?.perfil) {
+    if (perfil === 'EMPRESA') return
+    definirErroCreditos(null)
+    try {
+      definirCreditos(await chamarApi(perfil === 'CLIENTE' ? 'creditos/me' : 'creditos', 'GET', autorizacao.current))
+    } catch (erro) {
+      definirErroCreditos(erro.message)
+    }
+  }
+
   async function enviarAcesso(evento) {
     evento.preventDefault()
     definirMensagem(null)
@@ -171,6 +185,7 @@ function App() {
         }
         await carregarPedidos(dadosUsuario.perfil)
         await carregarContratos(dadosUsuario.perfil)
+        await carregarCreditos(dadosUsuario.perfil)
         await carregarAutomoveis()
         definirTela('inicio')
       }
@@ -189,6 +204,7 @@ function App() {
       if (usuario.perfil === 'CLIENTE') await carregarCliente()
       await carregarPedidos(usuario.perfil)
       await carregarContratos(usuario.perfil)
+      await carregarCreditos(usuario.perfil)
       mostrarMensagem(false, 'Dados atualizados com sucesso.')
     } catch (erro) {
       mostrarMensagem(true, erro.message)
@@ -386,13 +402,43 @@ function App() {
     }
   }
 
+  async function concederCredito(evento) {
+    evento.preventDefault()
+    definirCarregando(true)
+    definirMensagem(null)
+    try {
+      await chamarApi('creditos', 'POST', autorizacao.current, {
+        contratoId: creditoEmCadastro,
+        valor: Number(formularioCredito.valor),
+        parcelas: Number(formularioCredito.parcelas),
+      })
+      definirCreditoEmCadastro(null)
+      definirFormularioCredito({ valor: '', parcelas: '' })
+      await carregarCreditos()
+      mostrarMensagem(false, 'Crédito concedido e vinculado ao contrato.')
+    } catch (erro) {
+      mostrarMensagem(true, erro.message)
+    } finally {
+      definirCarregando(false)
+    }
+  }
+
   function renderizarContratos() {
     const agente = usuario.perfil !== 'CLIENTE'
     return <>
-      <div className="titulo-secao pedidos-titulo"><div><h3>Contratos</h3><p className="descricao">{agente ? 'Contratos realizados no sistema.' : 'Seus contratos de aluguel.'}</p></div><button type="button" className="secundario" onClick={() => carregarContratos()} disabled={carregando}>Atualizar</button></div>
+      <div className="titulo-secao pedidos-titulo"><div><h3>Contratos</h3><p className="descricao">{agente ? 'Contratos realizados no sistema.' : 'Seus contratos de aluguel.'}</p></div><button type="button" className="secundario" onClick={() => { carregarContratos(); carregarCreditos() }} disabled={carregando}>Atualizar</button></div>
       {erroContratos && <p className="mensagem erro" role="alert">{erroContratos}</p>}
+      {erroCreditos && <p className="mensagem erro" role="alert">{erroCreditos}</p>}
       {!erroContratos && contratos.length === 0 && <p className="descricao">Nenhum contrato realizado ainda.</p>}
-      <div className="lista-pedidos">{contratos.map((contrato) => <article className="item-pedido" key={contrato.id}><div className="dados-pedido"><strong>{contrato.automovel.marca} {contrato.automovel.modelo}</strong><p>{formatarData(contrato.dataRetirada)} a {formatarData(contrato.dataDevolucao)}</p>{agente && <p>Cliente: {contrato.cliente}</p>}<p>Proprietário: {contrato.proprietario} ({perfis[contrato.perfilProprietario]})</p><p>Contrato realizado em {new Date(contrato.executadoEm).toLocaleDateString('pt-BR')}</p></div><span className="selo-status">Contrato realizado</span></article>)}</div>
+      <div className="lista-pedidos">{contratos.map((contrato) => {
+        const credito = creditos.find((item) => item.contratoId === contrato.id)
+        return <article className="item-pedido" key={contrato.id}>
+          <div className="dados-pedido"><strong>{contrato.automovel.marca} {contrato.automovel.modelo}</strong><p>{formatarData(contrato.dataRetirada)} a {formatarData(contrato.dataDevolucao)}</p>{agente && <p>Cliente: {contrato.cliente}</p>}<p>Proprietário: {contrato.proprietario} ({perfis[contrato.perfilProprietario]})</p><p>Contrato realizado em {new Date(contrato.executadoEm).toLocaleDateString('pt-BR')}</p>{credito && <p>Crédito: R$ {Number(credito.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em {credito.parcelas} parcelas · {credito.banco}</p>}</div>
+          <span className="selo-status">Contrato realizado</span>
+          {usuario.perfil === 'BANCO' && !credito && <div className="acoes acoes-pedido"><button type="button" onClick={() => { definirCreditoEmCadastro(contrato.id); definirFormularioCredito({ valor: '', parcelas: '' }); definirMensagem(null) }} disabled={carregando}>Conceder crédito</button></div>}
+          {creditoEmCadastro === contrato.id && <form className="formulario-pedido-conta" onSubmit={concederCredito}><fieldset disabled={carregando}><div className="grade-campos"><label htmlFor={`valor-credito-${contrato.id}`}>Valor do crédito (R$)<input id={`valor-credito-${contrato.id}`} type="number" min="0.01" step="0.01" value={formularioCredito.valor} onChange={(evento) => definirFormularioCredito((atual) => ({ ...atual, valor: evento.target.value }))} required /></label><label htmlFor={`parcelas-credito-${contrato.id}`}>Número de parcelas<input id={`parcelas-credito-${contrato.id}`} type="number" min="1" max="120" step="1" value={formularioCredito.parcelas} onChange={(evento) => definirFormularioCredito((atual) => ({ ...atual, parcelas: evento.target.value }))} required /></label></div><div className="acoes"><button type="submit">Confirmar crédito</button><button type="button" className="secundario" onClick={() => definirCreditoEmCadastro(null)}>Voltar</button></div></fieldset></form>}
+        </article>
+      })}</div>
     </>
   }
 
@@ -435,6 +481,10 @@ function App() {
     definirErroContratos(null)
     definirContratoEmExecucao(null)
     definirTipoPropriedade('CLIENTE')
+    definirCreditos([])
+    definirErroCreditos(null)
+    definirCreditoEmCadastro(null)
+    definirFormularioCredito({ valor: '', parcelas: '' })
     definirNome('')
     definirNomeUsuario('')
     definirSenha('')

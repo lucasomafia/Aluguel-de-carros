@@ -1,6 +1,7 @@
 package br.com.aluguel.dto;
 
 import br.com.aluguel.model.Pedido;
+import br.com.aluguel.model.Perfil;
 import br.com.aluguel.model.StatusPedido;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -15,12 +16,14 @@ public record PedidoResponse(
     OffsetDateTime criadoEm,
     String parecer,
     String avaliadoPor,
+    Perfil perfilAvaliador,
     OffsetDateTime avaliadoEm
 ) {
     public static PedidoResponse de(Pedido pedido) {
         return new PedidoResponse(pedido.getId(), AutomovelResponse.de(pedido.getAutomovel()),
             pedido.getDataRetirada(), pedido.getDataDevolucao(), pedido.getStatus(), pedido.getCriadoEm(),
             pedido.getParecer(), pedido.getAvaliadoPor() == null ? null : pedido.getAvaliadoPor().getNome(),
+            pedido.getAvaliadoPor() == null ? null : pedido.getAvaliadoPor().getPerfil(),
             pedido.getAvaliadoEm());
     }
 }

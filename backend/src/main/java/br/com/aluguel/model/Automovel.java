@@ -41,6 +41,8 @@ public class Automovel {
         this.placa = placa;
     }
 
+    public void alterarProprietario(Usuario proprietario) { this.proprietario = proprietario; }
+
     public UUID getId() { return id; }
     public String getMatricula() { return matricula; }
     public int getAno() { return ano; }

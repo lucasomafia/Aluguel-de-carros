@@ -66,6 +66,8 @@ public class Pedido {
 
     public void cancelar() { this.status = StatusPedido.CANCELADO; }
 
+    public void contratar() { this.status = StatusPedido.CONTRATADO; }
+
     public void avaliar(Usuario agente, boolean aprovado, String parecer) {
         this.status = aprovado ? StatusPedido.APROVADO_AGUARDANDO_CONTRATO : StatusPedido.REJEITADO;
         this.parecer = parecer;

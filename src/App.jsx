@@ -37,7 +37,7 @@ const dataHoje = () => {
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`
 }
 const formatarData = (data) => new Date(`${data}T12:00:00`).toLocaleDateString('pt-BR')
-const nomesStatus = { PENDENTE_ANALISE: 'Pendente de análise', APROVADO_AGUARDANDO_CONTRATO: 'Aguardando contrato', REJEITADO: 'Rejeitado', CANCELADO: 'Cancelado' }
+const nomesStatus = { PENDENTE_ANALISE: 'Pendente de análise', APROVADO_AGUARDANDO_CONTRATO: 'Aguardando contrato', CONTRATADO: 'Contrato realizado', REJEITADO: 'Rejeitado', CANCELADO: 'Cancelado' }
 
 function App() {
   const [tela, definirTela] = useState('inicio')
@@ -61,6 +61,10 @@ function App() {
   const [formularioEdicaoPedido, definirFormularioEdicaoPedido] = useState(pedidoVazio)
   const [pedidoEmAvaliacao, definirPedidoEmAvaliacao] = useState(null)
   const [parecer, definirParecer] = useState('')
+  const [contratos, definirContratos] = useState([])
+  const [erroContratos, definirErroContratos] = useState(null)
+  const [contratoEmExecucao, definirContratoEmExecucao] = useState(null)
+  const [tipoPropriedade, definirTipoPropriedade] = useState('CLIENTE')
   const [carregando, definirCarregando] = useState(false)
   const [mensagem, definirMensagem] = useState(null)
   const autorizacao = useRef(null)
@@ -131,6 +135,15 @@ function App() {
     }
   }
 
+  async function carregarContratos(perfil = usuario?.perfil) {
+    definirErroContratos(null)
+    try {
+      definirContratos(await chamarApi(perfil === 'CLIENTE' ? 'contratos/me' : 'contratos', 'GET', autorizacao.current))
+    } catch (erro) {
+      definirErroContratos(erro.message)
+    }
+  }
+
   async function enviarAcesso(evento) {
     evento.preventDefault()
     definirMensagem(null)
@@ -157,6 +170,7 @@ function App() {
           await carregarCliente()
         }
         await carregarPedidos(dadosUsuario.perfil)
+        await carregarContratos(dadosUsuario.perfil)
         await carregarAutomoveis()
         definirTela('inicio')
       }
@@ -174,6 +188,7 @@ function App() {
       definirUsuario(await chamarApi('auth/me', 'GET', autorizacao.current))
       if (usuario.perfil === 'CLIENTE') await carregarCliente()
       await carregarPedidos(usuario.perfil)
+      await carregarContratos(usuario.perfil)
       mostrarMensagem(false, 'Dados atualizados com sucesso.')
     } catch (erro) {
       mostrarMensagem(true, erro.message)
@@ -352,6 +367,35 @@ function App() {
     }
   }
 
+  async function executarContrato(evento) {
+    evento.preventDefault()
+    definirCarregando(true)
+    definirMensagem(null)
+    try {
+      await chamarApi('contratos', 'POST', autorizacao.current,
+        { pedidoId: contratoEmExecucao, tipoPropriedade })
+      definirContratoEmExecucao(null)
+      definirTipoPropriedade('CLIENTE')
+      await carregarPedidos()
+      await carregarContratos()
+      mostrarMensagem(false, 'Contrato realizado com sucesso.')
+    } catch (erro) {
+      mostrarMensagem(true, erro.message)
+    } finally {
+      definirCarregando(false)
+    }
+  }
+
+  function renderizarContratos() {
+    const agente = usuario.perfil !== 'CLIENTE'
+    return <>
+      <div className="titulo-secao pedidos-titulo"><div><h3>Contratos</h3><p className="descricao">{agente ? 'Contratos realizados no sistema.' : 'Seus contratos de aluguel.'}</p></div><button type="button" className="secundario" onClick={() => carregarContratos()} disabled={carregando}>Atualizar</button></div>
+      {erroContratos && <p className="mensagem erro" role="alert">{erroContratos}</p>}
+      {!erroContratos && contratos.length === 0 && <p className="descricao">Nenhum contrato realizado ainda.</p>}
+      <div className="lista-pedidos">{contratos.map((contrato) => <article className="item-pedido" key={contrato.id}><div className="dados-pedido"><strong>{contrato.automovel.marca} {contrato.automovel.modelo}</strong><p>{formatarData(contrato.dataRetirada)} a {formatarData(contrato.dataDevolucao)}</p>{agente && <p>Cliente: {contrato.cliente}</p>}<p>Proprietário: {contrato.proprietario} ({perfis[contrato.perfilProprietario]})</p><p>Contrato realizado em {new Date(contrato.executadoEm).toLocaleDateString('pt-BR')}</p></div><span className="selo-status">Contrato realizado</span></article>)}</div>
+    </>
+  }
+
   function renderizarPedidos() {
     const agente = usuario.perfil !== 'CLIENTE'
     return <>
@@ -365,6 +409,8 @@ function App() {
         </div>
         <span className="selo-status">{nomesStatus[pedido.status] || pedido.status}</span>
         {pedido.status === 'PENDENTE_ANALISE' && <div className="acoes acoes-pedido"><button type="button" className="secundario" onClick={() => editarPedido(pedido)} disabled={carregando}>Modificar</button>{agente ? <button type="button" onClick={() => { definirPedidoEmAvaliacao(pedido.id); definirPedidoEmEdicao(null); definirParecer('') }} disabled={carregando}>Avaliar</button> : <button type="button" className="secundario" onClick={() => cancelarPedido(pedido)} disabled={carregando}>Cancelar pedido</button>}</div>}
+        {!agente && pedido.status === 'APROVADO_AGUARDANDO_CONTRATO' && <div className="acoes acoes-pedido"><button type="button" onClick={() => { definirContratoEmExecucao(pedido.id); definirTipoPropriedade('CLIENTE'); definirMensagem(null) }} disabled={carregando}>Realizar contrato</button></div>}
+        {!agente && contratoEmExecucao === pedido.id && <form className="formulario-pedido-conta" onSubmit={executarContrato}><fieldset disabled={carregando}><label htmlFor={`propriedade-${pedido.id}`}>Propriedade do automóvel<select id={`propriedade-${pedido.id}`} value={tipoPropriedade} onChange={(evento) => definirTipoPropriedade(evento.target.value)}><option value="CLIENTE">Cliente</option><option value={pedido.perfilAvaliador}>{perfis[pedido.perfilAvaliador]}</option></select></label><p className="descricao">Confirme o proprietário para concluir o contrato deste pedido.</p><div className="acoes"><button type="submit">Confirmar contrato</button><button type="button" className="secundario" onClick={() => definirContratoEmExecucao(null)}>Voltar</button></div></fieldset></form>}
         {pedidoEmEdicao === pedido.id && <form className="formulario-pedido-conta" onSubmit={modificarPedido}><fieldset disabled={carregando}><div className="grade-campos"><label htmlFor={`automovel-pedido-${pedido.id}`}>Automóvel<select id={`automovel-pedido-${pedido.id}`} value={formularioEdicaoPedido.automovelId} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, automovelId: evento.target.value }))} required>{automoveis.map((automovel) => <option value={automovel.id} key={automovel.id}>{automovel.marca} {automovel.modelo}</option>)}</select></label><label htmlFor={`retirada-pedido-${pedido.id}`}>Retirada<input id={`retirada-pedido-${pedido.id}`} type="date" min={dataHoje()} value={formularioEdicaoPedido.dataRetirada} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, dataRetirada: evento.target.value }))} required /></label><label htmlFor={`devolucao-pedido-${pedido.id}`}>Devolução<input id={`devolucao-pedido-${pedido.id}`} type="date" min={formularioEdicaoPedido.dataRetirada || dataHoje()} value={formularioEdicaoPedido.dataDevolucao} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, dataDevolucao: evento.target.value }))} required /></label></div><div className="acoes"><button type="submit">Salvar alterações</button><button type="button" className="secundario" onClick={() => definirPedidoEmEdicao(null)}>Fechar</button></div></fieldset></form>}
         {agente && pedidoEmAvaliacao === pedido.id && <form className="formulario-pedido-conta" onSubmit={(evento) => avaliarPedido(evento, true)}><fieldset disabled={carregando}><label htmlFor={`parecer-${pedido.id}`}>Parecer financeiro<textarea id={`parecer-${pedido.id}`} value={parecer} onChange={(evento) => definirParecer(evento.target.value)} required maxLength={1000} rows={4} /></label><div className="acoes"><button type="submit">Aprovar</button><button type="button" className="secundario" onClick={(evento) => avaliarPedido(evento, false)} disabled={!parecer.trim()}>Rejeitar</button><button type="button" className="secundario" onClick={() => definirPedidoEmAvaliacao(null)}>Fechar</button></div></fieldset></form>}
       </article>)}</div>
@@ -385,6 +431,10 @@ function App() {
     definirFormularioEdicaoPedido(pedidoVazio)
     definirPedidoEmAvaliacao(null)
     definirParecer('')
+    definirContratos([])
+    definirErroContratos(null)
+    definirContratoEmExecucao(null)
+    definirTipoPropriedade('CLIENTE')
     definirNome('')
     definirNomeUsuario('')
     definirSenha('')
@@ -486,8 +536,9 @@ function App() {
                   </fieldset>
                 </form>
                 {renderizarPedidos()}
+                {renderizarContratos()}
               </>
-            ) : renderizarPedidos()}
+            ) : <>{renderizarPedidos()}{renderizarContratos()}</>}
           </>
         ) : (
           <>

@@ -37,10 +37,34 @@ const dataHoje = () => {
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`
 }
 const formatarData = (data) => new Date(`${data}T12:00:00`).toLocaleDateString('pt-BR')
+const diaSeguinte = (data) => {
+  if (!data) return ''
+  const proximo = new Date(`${data}T12:00:00`)
+  proximo.setDate(proximo.getDate() + 1)
+  return `${proximo.getFullYear()}-${String(proximo.getMonth() + 1).padStart(2, '0')}-${String(proximo.getDate()).padStart(2, '0')}`
+}
+const cpfValido = (cpf) => {
+  if (!/^\d{11}$/.test(cpf) || new Set(cpf).size === 1) return false
+  return [9, 10].every((tamanho) => {
+    const soma = [...cpf.slice(0, tamanho)].reduce((total, digito, indice) => total + Number(digito) * (tamanho + 1 - indice), 0)
+    return (soma * 10) % 11 % 10 === Number(cpf[tamanho])
+  })
+}
+const destaques = {
+  CLIENTE: { titulo: 'Seu próximo caminho começa aqui.', texto: 'Explore os automóveis cadastrados e encontre o que combina com você.', botao: 'Ver automóveis' },
+  EMPRESA: { titulo: 'Gerencie a frota da empresa.', texto: 'Cadastre e atualize automóveis e acompanhe os pedidos de aluguel em Minha conta.', botao: 'Ver frota' },
+  BANCO: { titulo: 'Acompanhe pedidos e contratos.', texto: 'Consulte os automóveis disponíveis e, em Minha conta, avalie pedidos e conceda crédito.', botao: 'Ver automóveis' },
+}
+const tiposAcesso = {
+  CLIENTE: { titulo: 'Acesso do cliente', descricao: 'Entre para solicitar aluguéis e acompanhar seus pedidos e contratos.' },
+  EMPRESA: { titulo: 'Acesso da empresa', descricao: 'Entre para cadastrar automóveis e avaliar os pedidos de aluguel.' },
+  BANCO: { titulo: 'Acesso do banco', descricao: 'Entre para avaliar pedidos e conceder crédito aos contratos.' },
+}
 const nomesStatus = { PENDENTE_ANALISE: 'Pendente de análise', APROVADO_AGUARDANDO_CONTRATO: 'Aguardando contrato', CONTRATADO: 'Contrato realizado', REJEITADO: 'Rejeitado', CANCELADO: 'Cancelado' }
 
 function App() {
   const [tela, definirTela] = useState('login')
+  const [perfilAcesso, definirPerfilAcesso] = useState('CLIENTE')
   const [nome, definirNome] = useState('')
   const [nomeUsuario, definirNomeUsuario] = useState('')
   const [senha, definirSenha] = useState('')
@@ -168,6 +192,11 @@ function App() {
         const bytes = new TextEncoder().encode(`${nomeUsuario}:${senha}`)
         const credencial = `Basic ${btoa(String.fromCharCode(...bytes))}`
         const dadosUsuario = await chamarApi('auth/login', 'POST', credencial)
+        if (dadosUsuario.perfil !== perfilAcesso) {
+          definirSenha('')
+          mostrarMensagem(true, `Esta conta é do perfil ${perfis[dadosUsuario.perfil] || dadosUsuario.perfil}. Use o acesso de ${perfis[dadosUsuario.perfil] || dadosUsuario.perfil} para entrar.`)
+          return
+        }
         autorizacao.current = credencial
         definirUsuario(dadosUsuario)
         definirTela('inicio')
@@ -217,7 +246,11 @@ function App() {
   async function salvarCliente(evento) {
     evento.preventDefault()
     definirMensagem(null)
-    definirCarregando(true)
+    if (!cpfValido(formularioCliente.cpf.replace(/\D/g, ''))) {
+      mostrarMensagem(true, 'CPF inválido. Confira os 11 dígitos informados.')
+      return
+    }
+    definirCarregando('salvarCliente')
     try {
       const dados = { ...formularioCliente, cpf: formularioCliente.cpf.replace(/\D/g, ''),
         vinculos: formularioCliente.vinculos.map((vinculo) => ({ ...vinculo, rendimento: Number(vinculo.rendimento) })) }
@@ -250,7 +283,7 @@ function App() {
 
   async function salvarAutomovel(evento) {
     evento.preventDefault()
-    definirCarregando(true)
+    definirCarregando('salvarAutomovel')
     definirMensagem(null)
     try {
       const dados = { ...formularioAutomovel, ano: Number(formularioAutomovel.ano) }
@@ -302,13 +335,14 @@ function App() {
 
   async function criarPedido(evento) {
     evento.preventDefault()
-    definirCarregando(true)
+    definirCarregando('enviarPedido')
     definirMensagem(null)
     try {
       await chamarApi('pedidos', 'POST', autorizacao.current, formularioPedido)
-      definirFormularioPedido(pedidoVazio)
       await carregarPedidos()
+      definirFormularioPedido(pedidoVazio)
       definirTela('conta')
+      window.scrollTo(0, 0)
       mostrarMensagem(false, 'Pedido enviado. Acompanhe o status abaixo.')
     } catch (erro) {
       mostrarMensagem(true, erro.message)
@@ -327,7 +361,7 @@ function App() {
 
   async function modificarPedido(evento) {
     evento.preventDefault()
-    definirCarregando(true)
+    definirCarregando('modificarPedido')
     definirMensagem(null)
     try {
       await chamarApi(usuario.perfil === 'CLIENTE' ? `pedidos/me/${pedidoEmEdicao}` : `pedidos/${pedidoEmEdicao}`,
@@ -360,7 +394,7 @@ function App() {
 
   async function avaliarPedido(evento, aprovado) {
     evento.preventDefault()
-    definirCarregando(true)
+    definirCarregando(aprovado ? 'aprovar' : 'rejeitar')
     definirMensagem(null)
     try {
       await chamarApi(`pedidos/${pedidoEmAvaliacao}/avaliacao`, 'POST', autorizacao.current, { aprovado, parecer })
@@ -377,7 +411,7 @@ function App() {
 
   async function executarContrato(evento) {
     evento.preventDefault()
-    definirCarregando(true)
+    definirCarregando('contrato')
     definirMensagem(null)
     try {
       await chamarApi('contratos', 'POST', autorizacao.current,
@@ -396,7 +430,7 @@ function App() {
 
   async function concederCredito(evento) {
     evento.preventDefault()
-    definirCarregando(true)
+    definirCarregando('credito')
     definirMensagem(null)
     try {
       await chamarApi('creditos', 'POST', autorizacao.current, {
@@ -428,7 +462,7 @@ function App() {
           <div className="dados-pedido"><strong>{contrato.automovel.marca} {contrato.automovel.modelo}</strong><p>{formatarData(contrato.dataRetirada)} a {formatarData(contrato.dataDevolucao)}</p>{agente && <p>Cliente: {contrato.cliente}</p>}<p>Proprietário: {contrato.proprietario} ({perfis[contrato.perfilProprietario]})</p><p>Contrato realizado em {new Date(contrato.executadoEm).toLocaleDateString('pt-BR')}</p>{credito && <p>Crédito: R$ {Number(credito.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em {credito.parcelas} parcelas · {credito.banco}</p>}</div>
           <span className="selo-status">Contrato realizado</span>
           {usuario.perfil === 'BANCO' && !credito && <div className="acoes acoes-pedido"><button type="button" onClick={() => { definirCreditoEmCadastro(contrato.id); definirFormularioCredito({ valor: '', parcelas: '' }); definirMensagem(null) }} disabled={carregando}>Conceder crédito</button></div>}
-          {creditoEmCadastro === contrato.id && <form className="formulario-pedido-conta" onSubmit={concederCredito}><fieldset disabled={carregando}><div className="grade-campos"><label htmlFor={`valor-credito-${contrato.id}`}>Valor do crédito (R$)<input id={`valor-credito-${contrato.id}`} type="number" min="0.01" step="0.01" value={formularioCredito.valor} onChange={(evento) => definirFormularioCredito((atual) => ({ ...atual, valor: evento.target.value }))} required /></label><label htmlFor={`parcelas-credito-${contrato.id}`}>Número de parcelas<input id={`parcelas-credito-${contrato.id}`} type="number" min="1" max="120" step="1" value={formularioCredito.parcelas} onChange={(evento) => definirFormularioCredito((atual) => ({ ...atual, parcelas: evento.target.value }))} required /></label></div><div className="acoes"><button type="submit">Confirmar crédito</button><button type="button" className="secundario" onClick={() => definirCreditoEmCadastro(null)}>Voltar</button></div></fieldset></form>}
+          {creditoEmCadastro === contrato.id && <form className="formulario-pedido-conta" onSubmit={concederCredito}><fieldset disabled={carregando}><div className="grade-campos"><label htmlFor={`valor-credito-${contrato.id}`}>Valor do crédito (R$)<input id={`valor-credito-${contrato.id}`} type="number" min="0.01" step="0.01" value={formularioCredito.valor} onChange={(evento) => definirFormularioCredito((atual) => ({ ...atual, valor: evento.target.value }))} required /></label><label htmlFor={`parcelas-credito-${contrato.id}`}>Número de parcelas<input id={`parcelas-credito-${contrato.id}`} type="number" min="1" max="120" step="1" value={formularioCredito.parcelas} onChange={(evento) => definirFormularioCredito((atual) => ({ ...atual, parcelas: evento.target.value }))} required /></label></div><div className="acoes"><button type="submit">{carregando === 'credito' ? 'Concedendo...' : 'Confirmar crédito'}</button><button type="button" className="secundario" onClick={() => definirCreditoEmCadastro(null)}>Voltar</button></div></fieldset></form>}
         </article>
       })}</div>
     </>
@@ -443,14 +477,15 @@ function App() {
       <div className="lista-pedidos">{pedidos.map((pedido) => <article className="item-pedido" key={pedido.id}>
         <div className="dados-pedido"><strong>{pedido.automovel.marca} {pedido.automovel.modelo}</strong><p>{formatarData(pedido.dataRetirada)} a {formatarData(pedido.dataDevolucao)}</p>
           {agente && <div className="dados-cliente-pedido"><p><strong>Cliente:</strong> {pedido.cliente?.nome || 'Dados não disponíveis'}</p>{pedido.cliente && <><p>CPF: {pedido.cliente.cpf} · RG: {pedido.cliente.rg}</p><p>Profissão: {pedido.cliente.profissao}</p><p>Endereço: {pedido.cliente.endereco}</p>{pedido.cliente.vinculos.map((vinculo, indice) => <p key={indice}>{vinculo.entidadeEmpregadora}: R$ {Number(vinculo.rendimento).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>)}</>}</div>}
+          {['PENDENTE_ANALISE', 'APROVADO_AGUARDANDO_CONTRATO'].includes(pedido.status) && pedido.dataRetirada < dataHoje() && <p className="aviso-pedido">A data de retirada já passou. {agente ? 'Este pedido só pode ser rejeitado ou ter as datas modificadas.' : pedido.status === 'PENDENTE_ANALISE' ? 'Modifique as datas ou cancele o pedido.' : 'Faça um novo pedido com outras datas.'}</p>}
           {pedido.parecer && <p className="parecer-pedido"><strong>Parecer:</strong> {pedido.parecer}{pedido.avaliadoPor ? ` · ${pedido.avaliadoPor}` : ''}</p>}
         </div>
         <span className="selo-status">{nomesStatus[pedido.status] || pedido.status}</span>
         {pedido.status === 'PENDENTE_ANALISE' && <div className="acoes acoes-pedido"><button type="button" className="secundario" onClick={() => editarPedido(pedido)} disabled={carregando}>Modificar</button>{agente ? <button type="button" onClick={() => { definirPedidoEmAvaliacao(pedido.id); definirPedidoEmEdicao(null); definirParecer('') }} disabled={carregando}>Avaliar</button> : <button type="button" className="secundario" onClick={() => cancelarPedido(pedido)} disabled={carregando}>Cancelar pedido</button>}</div>}
-        {!agente && pedido.status === 'APROVADO_AGUARDANDO_CONTRATO' && <div className="acoes acoes-pedido"><button type="button" onClick={() => { definirContratoEmExecucao(pedido.id); definirTipoPropriedade('CLIENTE'); definirMensagem(null) }} disabled={carregando}>Realizar contrato</button></div>}
-        {!agente && contratoEmExecucao === pedido.id && <form className="formulario-pedido-conta" onSubmit={executarContrato}><fieldset disabled={carregando}><label htmlFor={`propriedade-${pedido.id}`}>Propriedade do automóvel<select id={`propriedade-${pedido.id}`} value={tipoPropriedade} onChange={(evento) => definirTipoPropriedade(evento.target.value)}><option value="CLIENTE">Cliente</option><option value={pedido.perfilAvaliador}>{perfis[pedido.perfilAvaliador]}</option></select></label><p className="descricao">Confirme o proprietário para concluir o contrato deste pedido.</p><div className="acoes"><button type="submit">Confirmar contrato</button><button type="button" className="secundario" onClick={() => definirContratoEmExecucao(null)}>Voltar</button></div></fieldset></form>}
-        {pedidoEmEdicao === pedido.id && <form className="formulario-pedido-conta" onSubmit={modificarPedido}><fieldset disabled={carregando}><div className="grade-campos"><label htmlFor={`automovel-pedido-${pedido.id}`}>Automóvel<select id={`automovel-pedido-${pedido.id}`} value={formularioEdicaoPedido.automovelId} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, automovelId: evento.target.value }))} required>{automoveis.map((automovel) => <option value={automovel.id} key={automovel.id}>{automovel.marca} {automovel.modelo}</option>)}</select></label><label htmlFor={`retirada-pedido-${pedido.id}`}>Retirada<input id={`retirada-pedido-${pedido.id}`} type="date" min={dataHoje()} value={formularioEdicaoPedido.dataRetirada} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, dataRetirada: evento.target.value }))} required /></label><label htmlFor={`devolucao-pedido-${pedido.id}`}>Devolução<input id={`devolucao-pedido-${pedido.id}`} type="date" min={formularioEdicaoPedido.dataRetirada || dataHoje()} value={formularioEdicaoPedido.dataDevolucao} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, dataDevolucao: evento.target.value }))} required /></label></div><div className="acoes"><button type="submit">Salvar alterações</button><button type="button" className="secundario" onClick={() => definirPedidoEmEdicao(null)}>Fechar</button></div></fieldset></form>}
-        {agente && pedidoEmAvaliacao === pedido.id && <form className="formulario-pedido-conta" onSubmit={(evento) => avaliarPedido(evento, true)}><fieldset disabled={carregando}><label htmlFor={`parecer-${pedido.id}`}>Parecer financeiro<textarea id={`parecer-${pedido.id}`} value={parecer} onChange={(evento) => definirParecer(evento.target.value)} required maxLength={1000} rows={4} /></label><div className="acoes"><button type="submit">Aprovar</button><button type="button" className="secundario" onClick={(evento) => avaliarPedido(evento, false)} disabled={!parecer.trim()}>Rejeitar</button><button type="button" className="secundario" onClick={() => definirPedidoEmAvaliacao(null)}>Fechar</button></div></fieldset></form>}
+        {!agente && pedido.status === 'APROVADO_AGUARDANDO_CONTRATO' && pedido.dataRetirada >= dataHoje() && <div className="acoes acoes-pedido"><button type="button" onClick={() => { definirContratoEmExecucao(pedido.id); definirTipoPropriedade('CLIENTE'); definirMensagem(null) }} disabled={carregando}>Realizar contrato</button></div>}
+        {!agente && contratoEmExecucao === pedido.id && <form className="formulario-pedido-conta" onSubmit={executarContrato}><fieldset disabled={carregando}><label htmlFor={`propriedade-${pedido.id}`}>Propriedade do automóvel<select id={`propriedade-${pedido.id}`} value={tipoPropriedade} onChange={(evento) => definirTipoPropriedade(evento.target.value)}><option value="CLIENTE">Cliente</option><option value={pedido.perfilAvaliador}>{perfis[pedido.perfilAvaliador]}</option></select></label><p className="descricao">Confirme o proprietário para concluir o contrato deste pedido.</p><div className="acoes"><button type="submit">{carregando === 'contrato' ? 'Realizando contrato...' : 'Confirmar contrato'}</button><button type="button" className="secundario" onClick={() => definirContratoEmExecucao(null)}>Voltar</button></div></fieldset></form>}
+        {pedidoEmEdicao === pedido.id && <form className="formulario-pedido-conta" onSubmit={modificarPedido}><fieldset disabled={carregando}><div className="grade-campos"><label htmlFor={`automovel-pedido-${pedido.id}`}>Automóvel<select id={`automovel-pedido-${pedido.id}`} value={formularioEdicaoPedido.automovelId} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, automovelId: evento.target.value }))} required>{automoveis.map((automovel) => <option value={automovel.id} key={automovel.id}>{automovel.marca} {automovel.modelo}</option>)}</select></label><label htmlFor={`retirada-pedido-${pedido.id}`}>Retirada<input id={`retirada-pedido-${pedido.id}`} type="date" min={dataHoje()} value={formularioEdicaoPedido.dataRetirada} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, dataRetirada: evento.target.value }))} required /></label><label htmlFor={`devolucao-pedido-${pedido.id}`}>Devolução<input id={`devolucao-pedido-${pedido.id}`} type="date" min={diaSeguinte(formularioEdicaoPedido.dataRetirada || dataHoje())} value={formularioEdicaoPedido.dataDevolucao} onChange={(evento) => definirFormularioEdicaoPedido((atual) => ({ ...atual, dataDevolucao: evento.target.value }))} required /></label></div><div className="acoes"><button type="submit">{carregando === 'modificarPedido' ? 'Salvando...' : 'Salvar alterações'}</button><button type="button" className="secundario" onClick={() => definirPedidoEmEdicao(null)}>Fechar</button></div></fieldset></form>}
+        {agente && pedidoEmAvaliacao === pedido.id && <form className="formulario-pedido-conta" onSubmit={(evento) => avaliarPedido(evento, true)}><fieldset disabled={carregando}><label htmlFor={`parecer-${pedido.id}`}>Parecer financeiro<textarea id={`parecer-${pedido.id}`} value={parecer} onChange={(evento) => definirParecer(evento.target.value)} required maxLength={1000} rows={4} /></label><div className="acoes"><button type="submit" disabled={pedido.dataRetirada < dataHoje()}>{carregando === 'aprovar' ? 'Aprovando...' : 'Aprovar'}</button><button type="button" className="secundario" onClick={(evento) => avaliarPedido(evento, false)} disabled={!parecer.trim()}>{carregando === 'rejeitar' ? 'Rejeitando...' : 'Rejeitar'}</button><button type="button" className="secundario" onClick={() => definirPedidoEmAvaliacao(null)}>Fechar</button></div></fieldset></form>}
       </article>)}</div>
     </>
   }
@@ -490,11 +525,11 @@ function App() {
   const cabecalho = (
     <header className="cabecalho-inicial">
       <span className="marca-inicial">Aluguel de carros</span>
-      <nav aria-label="Acesso" className="navegacao-inicial">
-        <button type="button" onClick={() => trocarTela(usuario ? tela === 'conta' ? 'inicio' : 'conta' : 'login')}>
-          {usuario && tela === 'conta' ? 'Voltar à home' : 'Minha conta'}
+      {usuario && <nav aria-label="Navegação" className="navegacao-inicial">
+        <button type="button" onClick={() => trocarTela(tela === 'conta' ? 'inicio' : 'conta')}>
+          {tela === 'conta' ? 'Voltar à home' : 'Minha conta'}
         </button>
-      </nav>
+      </nav>}
     </header>
   )
 
@@ -504,7 +539,7 @@ function App() {
       {cabecalho}
       <main className="pagina-inicial">
         <section className="destaque-inicial">
-          <div className="texto-destaque"><h1>Seu próximo caminho começa aqui.</h1><p>Explore os automóveis cadastrados e encontre o que combina com você.</p><button type="button" onClick={() => usuario ? document.getElementById('titulo-catalogo')?.scrollIntoView({ behavior: 'smooth' }) : trocarTela('cadastro')}>{usuario ? 'Ver automóveis' : 'Criar conta'}</button></div>
+          <div className="texto-destaque"><h1>{destaques[usuario.perfil].titulo}</h1><p>{destaques[usuario.perfil].texto}</p><button type="button" onClick={() => document.getElementById('titulo-catalogo')?.scrollIntoView({ behavior: 'smooth' })}>{destaques[usuario.perfil].botao}</button></div>
           <img src="/carro-home.png" alt="Vista da estrada de dentro de um carro" />
         </section>
         <form className="barra-filtros" onSubmit={(evento) => { evento.preventDefault(); definirFiltrosAplicados({ ...filtros }) }} aria-label="Filtrar automóveis">
@@ -520,10 +555,10 @@ function App() {
             <p className="descricao">{automoveis.find((automovel) => automovel.id === formularioPedido.automovelId)?.marca} {automoveis.find((automovel) => automovel.id === formularioPedido.automovelId)?.modelo}</p>
             <div className="grade-campos">
               <label htmlFor="data-retirada">Data de retirada<input id="data-retirada" type="date" min={dataHoje()} value={formularioPedido.dataRetirada} onChange={(evento) => definirFormularioPedido((atual) => ({ ...atual, dataRetirada: evento.target.value }))} required /></label>
-              <label htmlFor="data-devolucao">Data de devolução<input id="data-devolucao" type="date" min={formularioPedido.dataRetirada || dataHoje()} value={formularioPedido.dataDevolucao} onChange={(evento) => definirFormularioPedido((atual) => ({ ...atual, dataDevolucao: evento.target.value }))} required /></label>
+              <label htmlFor="data-devolucao">Data de devolução<input id="data-devolucao" type="date" min={diaSeguinte(formularioPedido.dataRetirada || dataHoje())} value={formularioPedido.dataDevolucao} onChange={(evento) => definirFormularioPedido((atual) => ({ ...atual, dataDevolucao: evento.target.value }))} required /></label>
             </div>
             {!cliente && <p className="descricao">Complete seus dados em Minha conta antes de enviar o pedido.</p>}
-            <div className="acoes"><button type="submit" disabled={!cliente}>Enviar pedido</button><button type="button" className="secundario" onClick={() => definirFormularioPedido(pedidoVazio)}>Cancelar</button></div>
+            <div className="acoes"><button type="submit" disabled={!cliente}>{carregando === 'enviarPedido' ? 'Enviando pedido...' : 'Enviar pedido'}</button><button type="button" className="secundario" onClick={() => definirFormularioPedido(pedidoVazio)}>Cancelar</button></div>
           </fieldset></form>}
           {usuario && usuario.perfil !== 'CLIENTE' && <form id="cadastro-automovel" onSubmit={salvarAutomovel} className="formulario-automovel formulario-automovel-home"><fieldset disabled={carregando}>
             <h2>{automovelEmEdicao ? 'Editar automóvel' : 'Cadastrar automóvel'}</h2>
@@ -534,7 +569,7 @@ function App() {
               <label htmlFor="modelo">Modelo<input id="modelo" value={formularioAutomovel.modelo} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, modelo: evento.target.value }))} required maxLength={80} /></label>
               <label htmlFor="ano">Ano<input id="ano" type="number" min="1886" max={new Date().getFullYear() + 1} value={formularioAutomovel.ano} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, ano: evento.target.value }))} required /></label>
             </div>
-            <div className="acoes"><button type="submit">{automovelEmEdicao ? 'Salvar alterações' : 'Cadastrar automóvel'}</button>{automovelEmEdicao && <button type="button" className="secundario" onClick={() => { definirAutomovelEmEdicao(null); definirFormularioAutomovel(automovelVazio) }}>Cancelar edição</button>}</div>
+            <div className="acoes"><button type="submit">{carregando === 'salvarAutomovel' ? 'Salvando...' : automovelEmEdicao ? 'Salvar alterações' : 'Cadastrar automóvel'}</button>{automovelEmEdicao && <button type="button" className="secundario" onClick={() => { definirAutomovelEmEdicao(null); definirFormularioAutomovel(automovelVazio) }}>Cancelar edição</button>}</div>
           </fieldset></form>}
           <div className="cabecalho-catalogo"><div><h2 id="titulo-catalogo">Automóveis</h2><p>{filtrosAtivos ? `${automoveisFiltrados.length} resultado${automoveisFiltrados.length === 1 ? '' : 's'} encontrado${automoveisFiltrados.length === 1 ? '' : 's'}.` : 'Veja os veículos cadastrados no sistema.'}</p></div><div className="acoes-catalogo">{filtrosAtivos && <button type="button" className="secundario" onClick={() => { definirFiltros(filtrosVazios); definirFiltrosAplicados(filtrosVazios) }}>Limpar filtros</button>}<button type="button" className="secundario" onClick={carregarAutomoveis} disabled={carregandoLista}>Atualizar lista</button></div></div>
           {erroAutomoveis && <p className="mensagem erro" role="alert">{erroAutomoveis}</p>}
@@ -554,7 +589,7 @@ function App() {
       <div className="conteudo-pagina">
       <header className="cabecalho">
         <h1>{usuario ? 'Minha conta' : 'Bem-vindo'}</h1>
-        <p>{usuario ? 'Seus dados no sistema' : 'Entre ou crie sua conta para continuar'}</p>
+        <p>{usuario ? 'Seus dados no sistema' : 'Escolha seu tipo de acesso para continuar'}</p>
       </header>
       <section className="cartao" aria-labelledby="titulo">
         {usuario ? (
@@ -578,7 +613,7 @@ function App() {
                       <label htmlFor={`rendimento-${indice}`}>Rendimento mensal (R$)<input id={`rendimento-${indice}`} type="number" min="0" step="0.01" value={vinculo.rendimento} onChange={(evento) => atualizarVinculo(indice, 'rendimento', evento.target.value)} required /></label>
                       <button type="button" className="secundario remover" onClick={() => definirFormularioCliente((atual) => ({ ...atual, vinculos: atual.vinculos.filter((_, posicao) => posicao !== indice) }))}>Remover</button>
                     </div>)}
-                    <div className="acoes"><button type="submit">{carregando ? 'Salvando...' : 'Salvar dados'}</button>{cliente && <button type="button" className="secundario" onClick={excluirCliente}>Excluir meus dados</button>}</div>
+                    <div className="acoes"><button type="submit">{carregando === 'salvarCliente' ? 'Salvando...' : 'Salvar dados'}</button>{cliente && <button type="button" className="secundario" onClick={excluirCliente}>Excluir meus dados</button>}</div>
                   </fieldset>
                 </form>
                 {renderizarPedidos()}
@@ -588,9 +623,10 @@ function App() {
           </>
         ) : (
           <>
-            <nav className="opcoes" aria-label="Acesso"><button type="button" className={cadastro ? '' : 'selecionado'} aria-pressed={!cadastro} onClick={() => trocarTela('login')} disabled={carregando}>Entrar</button><button type="button" className={cadastro ? 'selecionado' : ''} aria-pressed={cadastro} onClick={() => trocarTela('cadastro')} disabled={carregando}>Criar conta</button></nav>
-            <h2 id="titulo">{cadastro ? 'Crie sua conta' : 'Entre na sua conta'}</h2>
-            <p className="descricao">{cadastro ? 'Cadastre-se como cliente para acessar o sistema.' : 'Informe seu usuário e senha para continuar.'}</p>
+            <nav className="opcoes opcoes-perfil" aria-label="Tipo de acesso">{Object.keys(tiposAcesso).map((perfil) => <button type="button" key={perfil} className={perfilAcesso === perfil ? 'selecionado' : ''} aria-pressed={perfilAcesso === perfil} onClick={() => { definirPerfilAcesso(perfil); trocarTela('login') }} disabled={carregando}>{perfis[perfil]}</button>)}</nav>
+            {perfilAcesso === 'CLIENTE' && <nav className="opcoes opcoes-cliente" aria-label="Acesso do cliente"><button type="button" className={cadastro ? '' : 'selecionado'} aria-pressed={!cadastro} onClick={() => trocarTela('login')} disabled={carregando}>Entrar</button><button type="button" className={cadastro ? 'selecionado' : ''} aria-pressed={cadastro} onClick={() => trocarTela('cadastro')} disabled={carregando}>Criar conta</button></nav>}
+            <h2 id="titulo">{cadastro ? 'Crie sua conta de cliente' : tiposAcesso[perfilAcesso].titulo}</h2>
+            <p className="descricao">{cadastro ? 'Cadastre-se para solicitar aluguéis de automóveis.' : tiposAcesso[perfilAcesso].descricao}</p>
             {mensagem && <p className={`mensagem ${mensagem.erro ? 'erro' : 'sucesso'}`} role={mensagem.erro ? 'alert' : 'status'}>{mensagem.texto}</p>}
             <form onSubmit={enviarAcesso}><fieldset disabled={carregando}>
               {cadastro && <label htmlFor="nome">Nome completo<input id="nome" name="nome" autoComplete="name" value={nome} onChange={(evento) => definirNome(evento.target.value)} required maxLength={120} /></label>}
@@ -598,7 +634,8 @@ function App() {
               {cadastro && <small>Use letras sem acentos, números, ponto, hífen ou sublinhado.</small>}
               <label htmlFor="senha">Senha<input id="senha" name="senha" type="password" autoComplete={cadastro ? 'new-password' : 'current-password'} value={senha} onChange={(evento) => definirSenha(evento.target.value)} required minLength={cadastro ? 8 : undefined} maxLength={64} /></label>
               {cadastro && <small>De 8 a 64 caracteres, com no máximo 72 bytes.</small>}
-              <button className="enviar" type="submit">{carregando ? 'Aguarde...' : cadastro ? 'Criar conta' : 'Entrar'}</button>
+              <button className="enviar" type="submit">{carregando ? 'Aguarde...' : cadastro ? 'Criar conta' : `Entrar como ${perfis[perfilAcesso].toLowerCase()}`}</button>
+              {perfilAcesso !== 'CLIENTE' && <small className="aviso-agente">Contas de {perfis[perfilAcesso].toLowerCase()} são criadas pela administração do sistema.</small>}
             </fieldset></form>
           </>
         )}

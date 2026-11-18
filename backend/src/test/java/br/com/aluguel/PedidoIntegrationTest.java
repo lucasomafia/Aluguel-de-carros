@@ -45,7 +45,7 @@ class PedidoIntegrationTest {
         assertThat(enviar("POST", "/api/pedidos", dados, primeiro).statusCode()).isEqualTo(400);
         assertThat(enviar("GET", "/api/pedidos/me", null, segundo).body()).isEqualTo("[]");
 
-        String cpf = "9" + String.format("%010d", Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 10_000_000_000L));
+        String cpf = Cpfs.gerar();
         String cliente = "{\"rg\":\"12345\",\"cpf\":\"%s\",\"endereco\":\"Rua A\",\"profissao\":\"Professor\",\"vinculos\":[]}"
             .formatted(cpf);
         assertThat(enviar("PUT", "/api/clientes/me", cliente, primeiro).statusCode()).isEqualTo(200);
@@ -85,7 +85,7 @@ class PedidoIntegrationTest {
     void clienteCancelaPedidoPendente() throws Exception {
         String nomeUsuario = "p" + UUID.randomUUID().toString().replace("-", "");
         cadastrarUsuario(nomeUsuario);
-        String cpf = "8" + String.format("%010d", Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 10_000_000_000L));
+        String cpf = Cpfs.gerar();
         enviar("PUT", "/api/clientes/me", "{\"rg\":\"123\",\"cpf\":\"%s\",\"endereco\":\"Rua B\",\"profissao\":\"Analista\",\"vinculos\":[]}".formatted(cpf), nomeUsuario);
         String matricula = "MAT" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
         String automovel = "{\"matricula\":\"%s\",\"ano\":2025,\"marca\":\"Toyota\",\"modelo\":\"Corolla\",\"placa\":\"GHI7J89\"}"

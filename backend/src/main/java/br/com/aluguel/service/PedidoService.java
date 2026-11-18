@@ -20,13 +20,15 @@ public class PedidoService {
     private final UsuarioRepository usuarios;
     private final ClienteRepository clientes;
     private final AutomovelRepository automoveis;
+    private final ContratoRepository contratos;
 
     public PedidoService(PedidoRepository pedidos, UsuarioRepository usuarios, ClienteRepository clientes,
-                         AutomovelRepository automoveis) {
+                         AutomovelRepository automoveis, ContratoRepository contratos) {
         this.pedidos = pedidos;
         this.usuarios = usuarios;
         this.clientes = clientes;
         this.automoveis = automoveis;
+        this.contratos = contratos;
     }
 
     @Transactional(readOnly = true)
@@ -49,7 +51,9 @@ public class PedidoService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Complete seus dados de cliente antes de solicitar um automóvel.");
         }
         validarDatas(dados);
-        return PedidoResponse.de(pedidos.saveAndFlush(new Pedido(usuario, buscarAutomovel(dados),
+        Automovel automovel = buscarAutomovel(dados);
+        exigirSemContrato(automovel, dados.dataRetirada(), dados.dataDevolucao());
+        return PedidoResponse.de(pedidos.saveAndFlush(new Pedido(usuario, automovel,
             dados.dataRetirada(), dados.dataDevolucao())));
     }
 
@@ -86,6 +90,13 @@ public class PedidoService {
         Usuario agente = buscarAgente(nomeUsuario);
         Pedido pedido = buscarPedido(id);
         exigirPendente(pedido);
+        if (dados.aprovado()) {
+            if (pedido.getDataRetirada().isBefore(LocalDate.now())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "A data de retirada deste pedido já passou. O pedido só pode ser rejeitado.");
+            }
+            exigirSemContrato(pedido.getAutomovel(), pedido.getDataRetirada(), pedido.getDataDevolucao());
+        }
         pedido.avaliar(agente, dados.aprovado(), dados.parecer().strip());
         return PedidoResponse.de(pedidos.saveAndFlush(pedido));
     }
@@ -93,13 +104,22 @@ public class PedidoService {
     private PedidoResponse modificar(Pedido pedido, PedidoRequest dados) {
         exigirPendente(pedido);
         validarDatas(dados);
-        pedido.modificar(buscarAutomovel(dados), dados.dataRetirada(), dados.dataDevolucao());
+        Automovel automovel = buscarAutomovel(dados);
+        exigirSemContrato(automovel, dados.dataRetirada(), dados.dataDevolucao());
+        pedido.modificar(automovel, dados.dataRetirada(), dados.dataDevolucao());
         return PedidoResponse.de(pedidos.saveAndFlush(pedido));
     }
 
     private void validarDatas(PedidoRequest dados) {
         if (dados.dataRetirada().isBefore(LocalDate.now()) || !dados.dataDevolucao().isAfter(dados.dataRetirada())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe datas de retirada e devolução válidas.");
+        }
+    }
+
+    private void exigirSemContrato(Automovel automovel, LocalDate retirada, LocalDate devolucao) {
+        if (contratos.existeConflitoDeDatas(automovel.getId(), retirada, devolucao)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Este automóvel já possui contrato para o período informado. Escolha outras datas ou outro automóvel.");
         }
     }
 

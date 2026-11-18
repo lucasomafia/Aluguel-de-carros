@@ -5,6 +5,7 @@ import br.com.aluguel.dto.AutomovelResponse;
 import br.com.aluguel.model.Automovel;
 import br.com.aluguel.model.Usuario;
 import br.com.aluguel.repository.AutomovelRepository;
+import br.com.aluguel.repository.PedidoRepository;
 import br.com.aluguel.repository.UsuarioRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -19,10 +20,12 @@ import java.util.UUID;
 public class AutomovelService {
     private final AutomovelRepository automoveis;
     private final UsuarioRepository usuarios;
+    private final PedidoRepository pedidos;
 
-    public AutomovelService(AutomovelRepository automoveis, UsuarioRepository usuarios) {
+    public AutomovelService(AutomovelRepository automoveis, UsuarioRepository usuarios, PedidoRepository pedidos) {
         this.automoveis = automoveis;
         this.usuarios = usuarios;
+        this.pedidos = pedidos;
     }
 
     @Transactional(readOnly = true)
@@ -51,7 +54,12 @@ public class AutomovelService {
 
     @Transactional
     public void excluir(UUID id) {
-        automoveis.delete(buscar(id));
+        Automovel automovel = buscar(id);
+        if (pedidos.existsByAutomovelId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Este automóvel possui pedidos registrados e não pode ser excluído.");
+        }
+        automoveis.delete(automovel);
         automoveis.flush();
     }
 

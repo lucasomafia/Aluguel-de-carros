@@ -31,7 +31,7 @@ class CreditoIntegrationTest {
         String outroCliente = "c" + UUID.randomUUID().toString().replace("-", "");
         cadastrarCliente(cliente);
         cadastrarCliente(outroCliente);
-        String cpf = "6" + String.format("%010d", Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 10_000_000_000L));
+        String cpf = Cpfs.gerar();
         assertThat(enviar("PUT", "/api/clientes/me", "{\"rg\":\"123\",\"cpf\":\"%s\",\"endereco\":\"Rua A\",\"profissao\":\"Professor\",\"vinculos\":[]}".formatted(cpf), cliente).statusCode()).isEqualTo(200);
 
         String matricula = "MAT" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();

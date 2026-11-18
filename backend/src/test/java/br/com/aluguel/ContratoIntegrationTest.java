@@ -2,7 +2,9 @@ package br.com.aluguel;
 
 import br.com.aluguel.model.Perfil;
 import br.com.aluguel.model.Usuario;
+import br.com.aluguel.model.Pedido;
 import br.com.aluguel.repository.AutomovelRepository;
+import br.com.aluguel.repository.PedidoRepository;
 import br.com.aluguel.repository.UsuarioRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,7 @@ class ContratoIntegrationTest {
     @Value("${local.server.port}") int porta;
     @Autowired UsuarioRepository usuarios;
     @Autowired AutomovelRepository automoveis;
+    @Autowired PedidoRepository pedidos;
     @Autowired PasswordEncoder codificador;
     private final HttpClient clienteHttp = HttpClient.newHttpClient();
     private final ObjectMapper conversor = new ObjectMapper();
@@ -43,6 +46,7 @@ class ContratoIntegrationTest {
         assertThat(enviar("GET", "/api/contratos", null, primeiro).statusCode()).isEqualTo(403);
 
         avaliar(pedidoId, "empresa", true);
+        String pendenteSobreposto = criarPedido(segundo, automovelId, retirada.plusDays(1), retirada.plusDays(4));
         assertThat(enviar("POST", "/api/contratos", dados.replace("CLIENTE", "BANCO"), primeiro).statusCode()).isEqualTo(400);
         var criado = enviar("POST", "/api/contratos", dados, primeiro);
         assertThat(criado.statusCode()).isEqualTo(201);
@@ -55,9 +59,48 @@ class ContratoIntegrationTest {
         assertThat(automoveis.findById(UUID.fromString(automovelId)).orElseThrow().getProprietario().getId())
             .isEqualTo(usuarios.findByNomeUsuario(primeiro).orElseThrow().getId());
 
-        String sobreposto = criarPedido(segundo, automovelId, retirada.plusDays(1), retirada.plusDays(4));
-        avaliar(sobreposto, "empresa", true);
-        assertThat(enviar("POST", "/api/contratos", "{\"pedidoId\":\"%s\",\"tipoPropriedade\":\"EMPRESA\"}".formatted(sobreposto), segundo).statusCode()).isEqualTo(409);
+        String sobreposto = "{\"automovelId\":\"%s\",\"dataRetirada\":\"%s\",\"dataDevolucao\":\"%s\"}"
+            .formatted(automovelId, retirada.plusDays(1), retirada.plusDays(4));
+        var recusado = enviar("POST", "/api/pedidos", sobreposto, segundo);
+        assertThat(recusado.statusCode()).isEqualTo(409);
+        assertThat(recusado.body()).contains("já possui contrato");
+        assertThat(enviar("PUT", "/api/pedidos/me/" + pendenteSobreposto, sobreposto, segundo).statusCode()).isEqualTo(409);
+        assertThat(enviar("POST", "/api/pedidos/" + pendenteSobreposto + "/avaliacao",
+            "{\"aprovado\":true,\"parecer\":\"Aprovado\"}", "empresa").statusCode()).isEqualTo(409);
+        avaliar(pendenteSobreposto, "empresa", false);
+        criarPedido(segundo, automovelId, retirada.plusDays(3), retirada.plusDays(5));
+
+        var exclusao = enviar("DELETE", "/api/automoveis/" + automovelId, null, "empresa");
+        assertThat(exclusao.statusCode()).isEqualTo(409);
+        assertThat(exclusao.body()).contains("possui pedidos");
+    }
+
+    @Test
+    void pedidoComRetiradaVencidaSoPodeSerRejeitado() throws Exception {
+        String cliente = cadastrarCliente();
+        String automovelId = cadastrarAutomovel("QRS7T89");
+        LocalDate retirada = LocalDate.now().plusDays(5);
+        String aprovadoId = criarPedido(cliente, automovelId, retirada, retirada.plusDays(2));
+        avaliar(aprovadoId, "empresa", true);
+        String pendenteId = criarPedido(cliente, automovelId, retirada.plusDays(10), retirada.plusDays(12));
+        vencer(aprovadoId);
+        vencer(pendenteId);
+
+        var contrato = enviar("POST", "/api/contratos",
+            "{\"pedidoId\":\"%s\",\"tipoPropriedade\":\"CLIENTE\"}".formatted(aprovadoId), cliente);
+        assertThat(contrato.statusCode()).isEqualTo(409);
+        assertThat(contrato.body()).contains("já passou");
+        var aprovacao = enviar("POST", "/api/pedidos/" + pendenteId + "/avaliacao",
+            "{\"aprovado\":true,\"parecer\":\"Aprovado\"}", "empresa");
+        assertThat(aprovacao.statusCode()).isEqualTo(409);
+        assertThat(aprovacao.body()).contains("só pode ser rejeitado");
+        avaliar(pendenteId, "empresa", false);
+    }
+
+    private void vencer(String pedidoId) {
+        Pedido pedido = pedidos.findById(UUID.fromString(pedidoId)).orElseThrow();
+        pedido.modificar(pedido.getAutomovel(), LocalDate.now().minusDays(3), LocalDate.now().minusDays(1));
+        pedidos.saveAndFlush(pedido);
     }
 
     @Test
@@ -80,7 +123,7 @@ class ContratoIntegrationTest {
     private String cadastrarCliente() throws Exception {
         String nomeUsuario = "c" + UUID.randomUUID().toString().replace("-", "");
         enviar("POST", "/api/auth/cadastro", "{\"nome\":\"Cliente\",\"nomeUsuario\":\"%s\",\"senha\":\"Senha@123\"}".formatted(nomeUsuario), null);
-        String cpf = "7" + String.format("%010d", Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 10_000_000_000L));
+        String cpf = Cpfs.gerar();
         assertThat(enviar("PUT", "/api/clientes/me", "{\"rg\":\"123\",\"cpf\":\"%s\",\"endereco\":\"Rua A\",\"profissao\":\"Professor\",\"vinculos\":[]}".formatted(cpf), nomeUsuario).statusCode()).isEqualTo(200);
         return nomeUsuario;
     }

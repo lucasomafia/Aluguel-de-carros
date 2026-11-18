@@ -8,4 +8,5 @@ import java.util.UUID;
 public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
     List<Pedido> findByClienteIdOrderByCriadoEmDesc(UUID clienteId);
     List<Pedido> findAllByOrderByCriadoEmDesc();
+    boolean existsByAutomovelId(UUID automovelId);
 }

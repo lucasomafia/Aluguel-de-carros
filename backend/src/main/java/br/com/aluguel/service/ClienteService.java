@@ -34,6 +34,9 @@ public class ClienteService {
         Usuario usuario = buscarUsuario(nomeUsuario);
         UUID id = usuario.getId();
         String cpf = dados.cpf().strip();
+        if (!cpfValido(cpf)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CPF inválido. Confira os 11 dígitos informados.");
+        }
         if (clientes.findByCpf(cpf).filter(cliente -> !cliente.getUsuarioId().equals(id)).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "CPF já cadastrado.");
         }
@@ -50,6 +53,17 @@ public class ClienteService {
         Cliente cliente = buscarCliente(usuario.getId());
         clientes.delete(cliente);
         clientes.flush();
+    }
+
+    static boolean cpfValido(String cpf) {
+        if (cpf == null || !cpf.matches("[0-9]{11}") || cpf.chars().distinct().count() == 1) return false;
+        for (int tamanho = 9; tamanho <= 10; tamanho++) {
+            int soma = 0;
+            for (int i = 0; i < tamanho; i++) soma += (cpf.charAt(i) - '0') * (tamanho + 1 - i);
+            int digito = (soma * 10) % 11 % 10;
+            if (digito != cpf.charAt(tamanho) - '0') return false;
+        }
+        return true;
     }
 
     private Usuario buscarUsuario(String nomeUsuario) {

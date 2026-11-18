@@ -154,3 +154,12 @@ small { display: block; margin-top: 5px; color: #b8b7ba; font-size: 12px; }
   .navegacao-inicial { gap: 6px; }
   .cabecalho-inicial nav button { min-width: 0; padding: 8px 10px; }
 }
+
+.pagina-acesso .opcoes-perfil { margin-bottom: 18px; }
+.pagina-acesso .opcoes-cliente { gap: 22px; margin-bottom: 28px; border-bottom: 1px solid #3b3b3f; }
+.pagina-acesso .opcoes-cliente button { flex: 0 0 auto; margin-bottom: -1px; padding: 8px 2px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: #b8b7ba; }
+.pagina-acesso .opcoes-cliente button:hover:not(:disabled) { border: 0; border-bottom: 2px solid #6f2232; background: transparent; color: #fff; }
+.pagina-acesso .opcoes-cliente .selecionado { border-bottom-color: #c3073f; background: transparent; color: #fff; }
+.pagina-acesso .opcoes-perfil + h2 { margin-top: 16px; }
+.aviso-agente { margin-top: 14px; text-align: center; }
+.aviso-pedido { margin-top: 10px !important; padding: 8px 10px; border-left: 3px solid #c3073f; background: #2b1d22; color: #ffdce5 !important; }

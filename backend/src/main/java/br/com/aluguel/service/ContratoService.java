@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -56,6 +57,9 @@ public class ContratoService {
         }
         if (pedido.getStatus() != StatusPedido.APROVADO_AGUARDANDO_CONTRATO || contratos.existsByPedidoId(pedido.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Este pedido não está disponível para contratação.");
+        }
+        if (pedido.getDataRetirada().isBefore(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "A data de retirada deste pedido já passou. Faça um novo pedido.");
         }
         Usuario agente = pedido.getAvaliadoPor();
         if (agente == null) {

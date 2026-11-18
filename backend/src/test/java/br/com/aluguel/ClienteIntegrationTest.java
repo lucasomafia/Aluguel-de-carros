@@ -18,7 +18,7 @@ class ClienteIntegrationTest {
     @Test
     void criaConsultaAtualizaEExcluiPropriosDados() throws Exception {
         String nomeUsuario = "c" + UUID.randomUUID().toString().replace("-", "");
-        String cpf = "12345678901";
+        String cpf = Cpfs.gerar();
         assertThat(enviar("POST", "/api/auth/cadastro", "{\"nome\":\"Ana\",\"nomeUsuario\":\"%s\",\"senha\":\"Senha@123\"}".formatted(nomeUsuario), null).statusCode()).isEqualTo(201);
         assertThat(enviar("GET", "/api/clientes/me", null, nomeUsuario).statusCode()).isEqualTo(404);
         String dados = "{\"rg\":\"12345\",\"cpf\":\"%s\",\"endereco\":\"Rua A\",\"profissao\":\"Professora\",\"vinculos\":[{\"entidadeEmpregadora\":\"Escola\",\"rendimento\":2500.50}]}".formatted(cpf);
@@ -41,8 +41,20 @@ class ClienteIntegrationTest {
         String nomeUsuario = "c" + UUID.randomUUID().toString().replace("-", "");
         enviar("POST", "/api/auth/cadastro", "{\"nome\":\"Ana\",\"nomeUsuario\":\"%s\",\"senha\":\"Senha@123\"}".formatted(nomeUsuario), null);
         String vinculo = "{\"entidadeEmpregadora\":\"Empresa\",\"rendimento\":1000}";
-        String dados = "{\"rg\":\"1\",\"cpf\":\"12345678901\",\"endereco\":\"Rua\",\"profissao\":\"Cargo\",\"vinculos\":[%s,%s,%s,%s]}".formatted(vinculo, vinculo, vinculo, vinculo);
+        String dados = "{\"rg\":\"1\",\"cpf\":\"%s\",\"endereco\":\"Rua\",\"profissao\":\"Cargo\",\"vinculos\":[%s,%s,%s,%s]}".formatted(Cpfs.gerar(), vinculo, vinculo, vinculo, vinculo);
         assertThat(enviar("PUT", "/api/clientes/me", dados, nomeUsuario).statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void recusaCpfComDigitosVerificadoresInvalidos() throws Exception {
+        String nomeUsuario = "c" + UUID.randomUUID().toString().replace("-", "");
+        enviar("POST", "/api/auth/cadastro", "{\"nome\":\"Ana\",\"nomeUsuario\":\"%s\",\"senha\":\"Senha@123\"}".formatted(nomeUsuario), null);
+        String dados = "{\"rg\":\"1\",\"cpf\":\"%s\",\"endereco\":\"Rua\",\"profissao\":\"Cargo\",\"vinculos\":[]}";
+        var invalido = enviar("PUT", "/api/clientes/me", dados.formatted("12345678901"), nomeUsuario);
+        assertThat(invalido.statusCode()).isEqualTo(400);
+        assertThat(invalido.body()).contains("CPF inválido");
+        assertThat(enviar("PUT", "/api/clientes/me", dados.formatted("00000000000"), nomeUsuario).statusCode()).isEqualTo(400);
+        assertThat(enviar("PUT", "/api/clientes/me", dados.formatted("52998224725"), nomeUsuario).statusCode()).isEqualTo(200);
     }
 
     private HttpResponse<String> enviar(String metodo, String caminho, String corpo, String nomeUsuario) throws Exception {

@@ -109,6 +109,11 @@ class ContratoIntegrationTest {
         String banco = "b" + UUID.randomUUID().toString().replace("-", "");
         usuarios.saveAndFlush(new Usuario("Banco", banco, codificador.encode("Senha@123"), Perfil.BANCO));
         String automovelId = cadastrarAutomovel("MNO4P56");
+        String outroAutomovel = "{\"matricula\":\"MATBANCO1\",\"ano\":2025,\"marca\":\"Fiat\",\"modelo\":\"Mobi\",\"placa\":\"BNC1A23\"}";
+        assertThat(enviar("POST", "/api/automoveis", outroAutomovel, banco).statusCode()).isEqualTo(403);
+        assertThat(enviar("PUT", "/api/automoveis/" + automovelId, outroAutomovel, banco).statusCode()).isEqualTo(403);
+        assertThat(enviar("DELETE", "/api/automoveis/" + automovelId, null, banco).statusCode()).isEqualTo(403);
+        assertThat(enviar("GET", "/api/automoveis", null, banco).statusCode()).isEqualTo(200);
         LocalDate retirada = LocalDate.now().plusDays(10);
         String pedidoId = criarPedido(cliente, automovelId, retirada, retirada.plusDays(2));
         avaliar(pedidoId, banco, true);

@@ -17,15 +17,19 @@ import java.util.Locale;
 public class UsuarioService implements UserDetailsService {
     private final UsuarioRepository repositorio;
     private final PasswordEncoder codificadorSenha;
+    private final ClienteService clientes;
 
-    public UsuarioService(UsuarioRepository repositorio, PasswordEncoder codificadorSenha) {
+    public UsuarioService(UsuarioRepository repositorio, PasswordEncoder codificadorSenha, ClienteService clientes) {
         this.repositorio = repositorio;
         this.codificadorSenha = codificadorSenha;
+        this.clientes = clientes;
     }
 
     @Transactional
     public UsuarioResponse cadastrar(CadastroRequest requisicao) {
-        return UsuarioResponse.de(criar(requisicao.nome().strip(), requisicao.nomeUsuario(), requisicao.senha(), Perfil.CLIENTE));
+        Usuario usuario = criar(requisicao.nome().strip(), requisicao.nomeUsuario(), requisicao.senha(), Perfil.CLIENTE);
+        if (requisicao.cliente() != null) clientes.salvar(usuario.getNomeUsuario(), requisicao.cliente());
+        return UsuarioResponse.de(usuario);
     }
 
     @Transactional

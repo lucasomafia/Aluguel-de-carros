@@ -25,19 +25,19 @@ public class AutomovelController {
     public AutomovelResponse consultar(@PathVariable UUID id) { return servico.consultar(id); }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('EMPRESA', 'BANCO')")
+    @PreAuthorize("hasRole('EMPRESA')")
     public ResponseEntity<AutomovelResponse> cadastrar(Authentication autenticacao, @Valid @RequestBody AutomovelRequest dados) {
         return ResponseEntity.status(HttpStatus.CREATED).body(servico.cadastrar(autenticacao.getName(), dados));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('EMPRESA', 'BANCO')")
+    @PreAuthorize("hasRole('EMPRESA')")
     public AutomovelResponse modificar(@PathVariable UUID id, @Valid @RequestBody AutomovelRequest dados) {
         return servico.modificar(id, dados);
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('EMPRESA', 'BANCO')")
+    @PreAuthorize("hasRole('EMPRESA')")
     public ResponseEntity<Void> excluir(@PathVariable UUID id) {
         servico.excluir(id);
         return ResponseEntity.noContent().build();

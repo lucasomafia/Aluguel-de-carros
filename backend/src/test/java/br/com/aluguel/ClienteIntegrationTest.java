@@ -57,6 +57,22 @@ class ClienteIntegrationTest {
         assertThat(enviar("PUT", "/api/clientes/me", dados.formatted("52998224725"), nomeUsuario).statusCode()).isEqualTo(200);
     }
 
+    @Test
+    void cadastroDeContaJaGravaDadosDoClienteOuNadaEmCasoDeErro() throws Exception {
+        String nomeUsuario = "c" + UUID.randomUUID().toString().replace("-", "");
+        String cpf = Cpfs.gerar();
+        String conta = "{\"nome\":\"Bia\",\"nomeUsuario\":\"%s\",\"senha\":\"Senha@123\",\"cliente\":{\"rg\":\"77\",\"cpf\":\"%s\",\"endereco\":\"Rua C\",\"profissao\":\"Médica\",\"vinculos\":[{\"entidadeEmpregadora\":\"Hospital\",\"rendimento\":9000}]}}";
+        assertThat(enviar("POST", "/api/auth/cadastro", conta.formatted(nomeUsuario, cpf), null).statusCode()).isEqualTo(201);
+        assertThat(enviar("GET", "/api/clientes/me", null, nomeUsuario).body()).contains("Médica", "Hospital", cpf);
+
+        String outro = "c" + UUID.randomUUID().toString().replace("-", "");
+        var duplicado = enviar("POST", "/api/auth/cadastro", conta.formatted(outro, cpf), null);
+        assertThat(duplicado.statusCode()).isEqualTo(409);
+        assertThat(duplicado.body()).contains("CPF já cadastrado");
+        assertThat(enviar("POST", "/api/auth/cadastro", conta.formatted(outro, "12345678901"), null).statusCode()).isEqualTo(400);
+        assertThat(enviar("GET", "/api/auth/me", null, outro).statusCode()).isEqualTo(401);
+    }
+
     private HttpResponse<String> enviar(String metodo, String caminho, String corpo, String nomeUsuario) throws Exception {
         var requisicao = HttpRequest.newBuilder(URI.create("http://localhost:" + porta + caminho))
             .header("Content-Type", "application/json");

@@ -49,9 +49,9 @@ O banco pode, opcionalmente, registrar um crédito associado ao contrato, com va
 
 ## 🔄 Como o sistema funciona
 
-1. **Cadastro e acesso:** o cadastro público cria uma conta de cliente. O cliente entra com usuário e senha; os agentes usam contas provisionadas para os perfis empresa e banco.
+1. **Cadastro e acesso:** o cadastro público cria uma conta de cliente já com RG, CPF, endereço, profissão e rendimentos (tudo é gravado junto; se algum dado for recusado, nada é criado). Depois, esses dados podem ser alterados em Minha conta. O cliente entra com usuário e senha; os agentes usam contas provisionadas para os perfis empresa e banco.
 2. **Dados do cliente:** o cliente informa RG, CPF (com dígitos verificadores válidos), endereço, profissão e até três entidades empregadoras com seus rendimentos.
-3. **Consulta de automóveis:** após autenticar-se, o usuário acessa a página inicial e consulta os veículos cadastrados; o cliente pode iniciar um pedido.
+3. **Consulta de automóveis:** após autenticar-se, o usuário acessa a página inicial e consulta os veículos cadastrados; o cliente pode iniciar um pedido. Somente a empresa cadastra, altera e exclui automóveis; o banco apenas os consulta.
 4. **Pedido de aluguel:** o cliente escolhe automóvel e datas de retirada e devolução. A devolução deve ser pelo menos um dia depois da retirada, e não é possível pedir um automóvel que já tem contrato no período. Pode consultar, alterar ou cancelar o pedido enquanto ele está pendente de análise.
 5. **Análise financeira:** empresa e banco consultam os pedidos, podem ajustar os dados do pedido e registram aprovação ou rejeição com parecer. Pedidos cuja data de retirada já passou só podem ser rejeitados ou ter as datas alteradas.
 6. **Contrato:** após aprovação, o cliente executa o contrato e escolhe a propriedade do automóvel: cliente ou agente responsável pela aprovação. A execução atualiza o status do pedido e o proprietário registrado do veículo. Automóveis com pedidos registrados não podem ser excluídos.
@@ -64,7 +64,7 @@ O banco pode, opcionalmente, registrar um crédito associado ao contrato, com va
 - Tela de login com um acesso separado para cada perfil (Cliente, Empresa e Banco); somente o cliente pode criar conta, e uma conta só entra pelo acesso do seu próprio perfil.
 - Cadastro, consulta, alteração e exclusão dos dados de cliente.
 - Cadastro de até três vínculos empregatícios e respectivos rendimentos.
-- Consulta autenticada de automóveis e gerenciamento de veículos pelos agentes.
+- Consulta autenticada de automóveis; cadastro, alteração e exclusão de veículos somente pela empresa.
 - Criação, consulta, alteração, avaliação e cancelamento de pedidos, com controle de status.
 - Execução de contrato após aprovação financeira e atualização da propriedade do automóvel.
 - Concessão e consulta de crédito vinculado a contrato por agentes do perfil banco.
@@ -121,10 +121,11 @@ Os diagramas de classes, pacotes e casos de uso estão em [`docs/modelagem/v2`](
 
 | Método e rota | Acesso / finalidade |
 | --- | --- |
-| `POST /api/auth/cadastro` | Público; cria conta de cliente |
+| `POST /api/auth/cadastro` | Público; cria conta de cliente (campo opcional `cliente` com os dados pessoais) |
 | `POST /api/auth/login` | Autenticado com HTTP Basic; retorna os dados da conta |
 | `GET /api/auth/me` | Autenticado; consulta a conta atual |
 | `GET /api/automoveis` | Autenticado; lista automóveis |
+| `POST`, `PUT`, `DELETE /api/automoveis` | Somente empresa; gerencia a frota |
 | `GET /api/clientes/me`, `PUT /api/clientes/me`, `DELETE /api/clientes/me` | Autenticado como cliente; consulta, cria/atualiza ou remove os dados de cliente |
 | `GET /api/pedidos/me` | Cliente; lista seus pedidos |
 | `GET /api/pedidos` | Empresa ou banco; lista pedidos para análise |

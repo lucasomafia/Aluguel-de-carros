@@ -29,6 +29,8 @@ async function chamarApi(caminho, metodo, autorizacao, dados) {
 }
 
 const dadosVazios = { rg: '', cpf: '', endereco: '', profissao: '', vinculos: [] }
+const dadosParaEnvio = (dados) => ({ ...dados, cpf: dados.cpf.replace(/\D/g, ''),
+  vinculos: dados.vinculos.map((vinculo) => ({ ...vinculo, rendimento: Number(vinculo.rendimento) })) })
 const automovelVazio = { matricula: '', ano: '', marca: '', modelo: '', placa: '' }
 const filtrosVazios = { busca: '', marca: '', ano: '' }
 const pedidoVazio = { automovelId: '', dataRetirada: '', dataDevolucao: '' }
@@ -180,13 +182,18 @@ function App() {
       mostrarMensagem(true, 'A senha deve ocupar no máximo 72 bytes.')
       return
     }
+    if (cadastro && !cpfValido(formularioCliente.cpf.replace(/\D/g, ''))) {
+      mostrarMensagem(true, 'CPF inválido. Confira os 11 dígitos informados.')
+      return
+    }
     definirCarregando(true)
     try {
       if (cadastro) {
-        await chamarApi('auth/cadastro', 'POST', null, { nome, nomeUsuario, senha })
+        await chamarApi('auth/cadastro', 'POST', null, { nome, nomeUsuario, senha, cliente: dadosParaEnvio(formularioCliente) })
         definirTela('login')
         definirNome('')
         definirSenha('')
+        definirFormularioCliente(dadosVazios)
         mostrarMensagem(false, 'Conta criada! Entre com seu usuário e senha.')
       } else {
         const bytes = new TextEncoder().encode(`${nomeUsuario}:${senha}`)
@@ -252,9 +259,7 @@ function App() {
     }
     definirCarregando('salvarCliente')
     try {
-      const dados = { ...formularioCliente, cpf: formularioCliente.cpf.replace(/\D/g, ''),
-        vinculos: formularioCliente.vinculos.map((vinculo) => ({ ...vinculo, rendimento: Number(vinculo.rendimento) })) }
-      const salvo = await chamarApi('clientes/me', 'PUT', autorizacao.current, dados)
+      const salvo = await chamarApi('clientes/me', 'PUT', autorizacao.current, dadosParaEnvio(formularioCliente))
       definirCliente(salvo)
       definirFormularioCliente({ ...salvo, vinculos: salvo.vinculos.map((vinculo) => ({ ...vinculo, rendimento: String(vinculo.rendimento) })) })
       mostrarMensagem(false, 'Dados do cliente salvos com sucesso.')
@@ -449,6 +454,25 @@ function App() {
     }
   }
 
+  function renderizarCamposCliente() {
+    return (
+      <>
+        <div className="grade-campos">
+          <label htmlFor="rg">RG<input id="rg" value={formularioCliente.rg} onChange={(evento) => atualizarCampo('rg', evento.target.value)} required maxLength={30} /></label>
+          <label htmlFor="cpf">CPF<input id="cpf" inputMode="numeric" value={formularioCliente.cpf} onChange={(evento) => atualizarCampo('cpf', evento.target.value)} required pattern="[0-9]{11}" maxLength={11} title="Informe os 11 dígitos do CPF" /></label>
+          <label htmlFor="endereco">Endereço<input id="endereco" autoComplete="street-address" value={formularioCliente.endereco} onChange={(evento) => atualizarCampo('endereco', evento.target.value)} required maxLength={255} /></label>
+          <label htmlFor="profissao">Profissão<input id="profissao" value={formularioCliente.profissao} onChange={(evento) => atualizarCampo('profissao', evento.target.value)} required maxLength={120} /></label>
+        </div>
+        <div className="titulo-secao vinculos-titulo"><div><h3>Rendimentos</h3><p className="descricao">Informe até três entidades empregadoras.</p></div>{formularioCliente.vinculos.length < 3 && <button type="button" className="secundario" onClick={() => definirFormularioCliente((atual) => ({ ...atual, vinculos: [...atual.vinculos, { entidadeEmpregadora: '', rendimento: '' }] }))}>Adicionar</button>}</div>
+        {formularioCliente.vinculos.map((vinculo, indice) => <div className="linha-vinculo" key={indice}>
+          <label htmlFor={`empresa-${indice}`}>Entidade empregadora<input id={`empresa-${indice}`} value={vinculo.entidadeEmpregadora} onChange={(evento) => atualizarVinculo(indice, 'entidadeEmpregadora', evento.target.value)} required maxLength={120} /></label>
+          <label htmlFor={`rendimento-${indice}`}>Rendimento mensal (R$)<input id={`rendimento-${indice}`} type="number" min="0" step="0.01" value={vinculo.rendimento} onChange={(evento) => atualizarVinculo(indice, 'rendimento', evento.target.value)} required /></label>
+          <button type="button" className="secundario remover" onClick={() => definirFormularioCliente((atual) => ({ ...atual, vinculos: atual.vinculos.filter((_, posicao) => posicao !== indice) }))}>Remover</button>
+        </div>)}
+      </>
+    )
+  }
+
   function renderizarContratos() {
     const agente = usuario.perfil !== 'CLIENTE'
     return <>
@@ -560,7 +584,7 @@ function App() {
             {!cliente && <p className="descricao">Complete seus dados em Minha conta antes de enviar o pedido.</p>}
             <div className="acoes"><button type="submit" disabled={!cliente}>{carregando === 'enviarPedido' ? 'Enviando pedido...' : 'Enviar pedido'}</button><button type="button" className="secundario" onClick={() => definirFormularioPedido(pedidoVazio)}>Cancelar</button></div>
           </fieldset></form>}
-          {usuario && usuario.perfil !== 'CLIENTE' && <form id="cadastro-automovel" onSubmit={salvarAutomovel} className="formulario-automovel formulario-automovel-home"><fieldset disabled={carregando}>
+          {usuario?.perfil === 'EMPRESA' && <form id="cadastro-automovel" onSubmit={salvarAutomovel} className="formulario-automovel formulario-automovel-home"><fieldset disabled={carregando}>
             <h2>{automovelEmEdicao ? 'Editar automóvel' : 'Cadastrar automóvel'}</h2>
             <div className="grade-campos">
               <label htmlFor="matricula">Matrícula<input id="matricula" value={formularioAutomovel.matricula} onChange={(evento) => definirFormularioAutomovel((atual) => ({ ...atual, matricula: evento.target.value }))} required maxLength={40} /></label>
@@ -574,7 +598,7 @@ function App() {
           <div className="cabecalho-catalogo"><div><h2 id="titulo-catalogo">Automóveis</h2><p>{filtrosAtivos ? `${automoveisFiltrados.length} resultado${automoveisFiltrados.length === 1 ? '' : 's'} encontrado${automoveisFiltrados.length === 1 ? '' : 's'}.` : 'Veja os veículos cadastrados no sistema.'}</p></div><div className="acoes-catalogo">{filtrosAtivos && <button type="button" className="secundario" onClick={() => { definirFiltros(filtrosVazios); definirFiltrosAplicados(filtrosVazios) }}>Limpar filtros</button>}<button type="button" className="secundario" onClick={carregarAutomoveis} disabled={carregandoLista}>Atualizar lista</button></div></div>
           {erroAutomoveis && <p className="mensagem erro" role="alert">{erroAutomoveis}</p>}
           {carregandoLista ? <p className="estado-lista">Carregando automóveis...</p> : !erroAutomoveis && automoveisFiltrados.length === 0 ? <p className="estado-lista">{automoveis.length ? 'Nenhum automóvel corresponde aos filtros.' : 'Nenhum automóvel cadastrado ainda.'}</p> : null}
-          <div className="grade-automoveis">{automoveisFiltrados.map((automovel) => <article className="cartao-automovel" key={automovel.id}><span className="selo-ano">{automovel.ano}</span><h3>{automovel.marca} {automovel.modelo}</h3><p>Placa {automovel.placa}</p><p>Matrícula {automovel.matricula}</p>{usuario?.perfil === 'CLIENTE' && <div className="acoes acoes-automovel"><button type="button" onClick={() => selecionarAutomovel(automovel)}>Solicitar aluguel</button></div>}{usuario && usuario.perfil !== 'CLIENTE' && <div className="acoes acoes-automovel"><button type="button" className="secundario" onClick={() => editarAutomovel(automovel)} disabled={carregando}>Editar</button><button type="button" className="secundario" onClick={() => excluirAutomovel(automovel)} disabled={carregando}>Excluir</button></div>}</article>)}</div>
+          <div className="grade-automoveis">{automoveisFiltrados.map((automovel) => <article className="cartao-automovel" key={automovel.id}><span className="selo-ano">{automovel.ano}</span><h3>{automovel.marca} {automovel.modelo}</h3><p>Placa {automovel.placa}</p><p>Matrícula {automovel.matricula}</p>{usuario?.perfil === 'CLIENTE' && <div className="acoes acoes-automovel"><button type="button" onClick={() => selecionarAutomovel(automovel)}>Solicitar aluguel</button></div>}{usuario?.perfil === 'EMPRESA' && <div className="acoes acoes-automovel"><button type="button" className="secundario" onClick={() => editarAutomovel(automovel)} disabled={carregando}>Editar</button><button type="button" className="secundario" onClick={() => excluirAutomovel(automovel)} disabled={carregando}>Excluir</button></div>}</article>)}</div>
         </section>
       </main>
       </>
@@ -598,21 +622,10 @@ function App() {
             {mensagem && <p className={`mensagem ${mensagem.erro ? 'erro' : 'sucesso'}`} role={mensagem.erro ? 'alert' : 'status'}>{mensagem.texto}</p>}
             {usuario.perfil === 'CLIENTE' ? (
               <>
-                <div className="titulo-secao"><div><h3>Meus dados</h3><p className="descricao">{cliente ? 'Atualize seu cadastro quando precisar.' : 'Complete seu cadastro de cliente.'}</p></div><button type="button" className="secundario" onClick={consultarUsuario} disabled={carregando}>Atualizar</button></div>
+                <div className="titulo-secao"><div><h3>Meus dados</h3><p className="descricao">{cliente ? 'Confira e atualize seu cadastro quando precisar.' : 'Complete seu cadastro de cliente.'}</p></div><button type="button" className="secundario" onClick={consultarUsuario} disabled={carregando}>Atualizar</button></div>
                 <form onSubmit={salvarCliente}>
                   <fieldset disabled={carregando}>
-                    <div className="grade-campos">
-                      <label htmlFor="rg">RG<input id="rg" value={formularioCliente.rg} onChange={(evento) => atualizarCampo('rg', evento.target.value)} required maxLength={30} /></label>
-                      <label htmlFor="cpf">CPF<input id="cpf" inputMode="numeric" value={formularioCliente.cpf} onChange={(evento) => atualizarCampo('cpf', evento.target.value)} required pattern="[0-9]{11}" maxLength={11} title="Informe os 11 dígitos do CPF" /></label>
-                      <label htmlFor="endereco">Endereço<input id="endereco" autoComplete="street-address" value={formularioCliente.endereco} onChange={(evento) => atualizarCampo('endereco', evento.target.value)} required maxLength={255} /></label>
-                      <label htmlFor="profissao">Profissão<input id="profissao" value={formularioCliente.profissao} onChange={(evento) => atualizarCampo('profissao', evento.target.value)} required maxLength={120} /></label>
-                    </div>
-                    <div className="titulo-secao vinculos-titulo"><div><h3>Rendimentos</h3><p className="descricao">Informe até três entidades empregadoras.</p></div>{formularioCliente.vinculos.length < 3 && <button type="button" className="secundario" onClick={() => definirFormularioCliente((atual) => ({ ...atual, vinculos: [...atual.vinculos, { entidadeEmpregadora: '', rendimento: '' }] }))}>Adicionar</button>}</div>
-                    {formularioCliente.vinculos.map((vinculo, indice) => <div className="linha-vinculo" key={indice}>
-                      <label htmlFor={`empresa-${indice}`}>Entidade empregadora<input id={`empresa-${indice}`} value={vinculo.entidadeEmpregadora} onChange={(evento) => atualizarVinculo(indice, 'entidadeEmpregadora', evento.target.value)} required maxLength={120} /></label>
-                      <label htmlFor={`rendimento-${indice}`}>Rendimento mensal (R$)<input id={`rendimento-${indice}`} type="number" min="0" step="0.01" value={vinculo.rendimento} onChange={(evento) => atualizarVinculo(indice, 'rendimento', evento.target.value)} required /></label>
-                      <button type="button" className="secundario remover" onClick={() => definirFormularioCliente((atual) => ({ ...atual, vinculos: atual.vinculos.filter((_, posicao) => posicao !== indice) }))}>Remover</button>
-                    </div>)}
+                    {renderizarCamposCliente()}
                     <div className="acoes"><button type="submit">{carregando === 'salvarCliente' ? 'Salvando...' : 'Salvar dados'}</button>{cliente && <button type="button" className="secundario" onClick={excluirCliente}>Excluir meus dados</button>}</div>
                   </fieldset>
                 </form>
@@ -634,6 +647,7 @@ function App() {
               {cadastro && <small>Use letras sem acentos, números, ponto, hífen ou sublinhado.</small>}
               <label htmlFor="senha">Senha<input id="senha" name="senha" type="password" autoComplete={cadastro ? 'new-password' : 'current-password'} value={senha} onChange={(evento) => definirSenha(evento.target.value)} required minLength={cadastro ? 8 : undefined} maxLength={64} /></label>
               {cadastro && <small>De 8 a 64 caracteres, com no máximo 72 bytes.</small>}
+              {cadastro && <div className="dados-cadastro"><div className="titulo-secao"><div><h3>Dados pessoais</h3><p className="descricao">Necessários para solicitar aluguéis.</p></div></div>{renderizarCamposCliente()}</div>}
               <button className="enviar" type="submit">{carregando ? 'Aguarde...' : cadastro ? 'Criar conta' : `Entrar como ${perfis[perfilAcesso].toLowerCase()}`}</button>
               {perfilAcesso !== 'CLIENTE' && <small className="aviso-agente">Contas de {perfis[perfilAcesso].toLowerCase()} são criadas pela administração do sistema.</small>}
             </fieldset></form>
